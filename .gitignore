@@ -1,0 +1,156 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/staticfiles/
+/mediafiles/
+*.pot
+*.mo
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Virtual Environment
+venv/
+env/
+.venv/
+venv.bak/
+env.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+*.komodoproject
+*.kdev4
+session.vim
+.tags*
+.tags_sorted
+
+# OS
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis
+dump.rdb
+redis-data/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/datasources.xml
+.idea/dataSources.ids
+.idea/sqlDataSources.xml
+.idea/dynamic.xml
+.idea/uiDesigner.xml
+.idea/misc.xml
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history
+
+# Project specific
+*.sqlite3
+*.db
+*.sql
+*.dump
+*.backup
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Docker
+docker-compose.override.yml
+*.dockerfile
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database migrations (optional)
+# !/migrations/
+# !/migrations/**/__init__.py
+
+# Pandas cache
+.pandas_cache/
+
+# Security
+secrets.json
+secret_key.txt
+
+# Development
+development.db
+test.db
+
+# Documentation
+docs/_build/
+
+# Backup files
+*.bak
+*.back
+*_backup
