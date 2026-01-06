@@ -1,4 +1,4 @@
-# Техническое задание на проект: CinemaAggregator
+# Техническое задание: CinemaAggregator
 
 ## Цель проекта
 
@@ -44,12 +44,12 @@
 
 **Модель 4: Rating**
 
-`film` (ForeignKey -> Film): Связь с фильмом
-`source` (CharField, choices): Источник (imdb, rotten_tomatoes, metacritic, kinopoisk)
-`value` (DecimalField): Значение рейтинга
-`max_value` (DecimalField): Максимальное значение шкалы (10, 100, 5)
-`votes_count` (IntegerField, null=True): Количество голосов
-`last_updated` (DateTimeField): Дата последнего обновления
+- `film` (ForeignKey -> Film): Связь с фильмом
+- `source` (CharField, choices): Источник (imdb, rotten_tomatoes, metacritic, kinopoisk)
+- `value` (DecimalField): Значение рейтинга
+- `max_value` (DecimalField): Максимальное значение шкалы (10, 100, 5)
+- `votes_count` (IntegerField, null=True): Количество голосов
+- `last_updated` (DateTimeField): Дата последнего обновления
 
 ## Ключевой функционал
 
