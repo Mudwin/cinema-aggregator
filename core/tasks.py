@@ -486,3 +486,146 @@ def update_old_ratings(days_old: int = 7) -> dict:
     except Exception as e:
         logger.error(f"Failed to update old ratings: {str(e)}")
         return {'status': 'error', 'message': str(e)}
+    
+
+@shared_task
+def update_popular_films_data(limit: int = 50) -> dict:
+    """
+    Задача для обновления данных популярных фильмов.
+    Обновляет фильмы с самым высоким composite_rating.
+    
+    Args:
+        limit (int): Количество фильмов для обновления
+    
+    Returns:
+        dict: Статистика обновления
+    """
+    try:
+        popular_films = Film.objects.exclude(
+            composite_rating__isnull=True
+        ).order_by('-composite_rating')[:limit]
+        
+        total_films = popular_films.count()
+        updated_films = 0
+        
+        logger.info(f"Updating data for {total_films} popular films")
+        
+        for film in popular_films:
+            try:
+                update_film_ratings.delay(film.id)
+                updated_films += 1
+            except Exception as e:
+                logger.error(f"Failed to schedule update for film {film.id}: {str(e)}")
+        
+        return {
+            'status': 'success',
+            'total_films': total_films,
+            'scheduled_updates': updated_films
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to update popular films data: {str(e)}")
+        return {'status': 'error', 'message': str(e)}
+
+
+@shared_task
+def cleanup_old_tasks(days_old: int = 30) -> dict:
+    """
+    Задача для очистки старых результатов задач.
+    Удаляет результаты задач старше указанного количества дней.
+    
+    Args:
+        days_old (int): Удалять результаты старше N дней
+    
+    Returns:
+        dict: Статистика очистки
+    """
+    try:
+        from celery.result import AsyncResult
+        from django_celery_results.models import TaskResult
+        from django.utils import timezone
+        
+        try:
+            cutoff_date = timezone.now() - timezone.timedelta(days=days_old)
+            deleted_count, _ = TaskResult.objects.filter(
+                date_done__lt=cutoff_date
+            ).delete()
+            
+            logger.info(f"Cleaned up {deleted_count} old task results")
+            
+            return {
+                'status': 'success',
+                'deleted_count': deleted_count,
+                'days_old': days_old
+            }
+            
+        except ImportError:
+            logger.warning("django-celery-results not installed, skipping cleanup")
+            return {
+                'status': 'skipped',
+                'message': 'django-celery-results not installed'
+            }
+        
+    except Exception as e:
+        logger.error(f"Failed to cleanup old tasks: {str(e)}")
+        return {'status': 'error', 'message': str(e)}
+
+
+@shared_task
+def check_api_status() -> dict:
+    """
+    Задача для проверки статуса внешних API.
+    
+    Returns:
+        dict: Статус всех API
+    """
+    from .services import TMDBService, OMDbService, KinopoiskService
+    
+    api_status = {}
+    
+    try:
+        tmdb_service = TMDBService()
+        tmdb_response = tmdb_service.search_movies("test", page=1)
+        api_status['tmdb'] = {
+            'status': 'ok' if 'results' in tmdb_response else 'error',
+            'message': 'TMDB API is working' if 'results' in tmdb_response else 'TMDB API error'
+        }
+    except Exception as e:
+        api_status['tmdb'] = {
+            'status': 'error',
+            'message': str(e)
+        }
+    
+    try:
+        omdb_service = OMDbService()
+        omdb_response = omdb_service.search_movies("test", page=1)
+        api_status['omdb'] = {
+            'status': 'ok' if 'Search' in omdb_response else 'error',
+            'message': 'OMDb API is working' if 'Search' in omdb_response else 'OMDb API error'
+        }
+    except Exception as e:
+        api_status['omdb'] = {
+            'status': 'error',
+            'message': str(e)
+        }
+    
+    try:
+        kinopoisk_service = KinopoiskService()
+        kinopoisk_response = kinopoisk_service.search_movies("test", page=1)
+        api_status['kinopoisk'] = {
+            'status': 'ok' if 'items' in kinopoisk_response else 'error',
+            'message': 'Kinopoisk API is working' if 'items' in kinopoisk_response else 'Kinopoisk API error'
+        }
+    except Exception as e:
+        api_status['kinopoisk'] = {
+            'status': 'error',
+            'message': str(e)
+        }
+    
+    logger.info(f"API status check completed: {api_status}")
+    
+    return {
+        'status': 'success',
+        'api_status': api_status,
+        'timestamp': timezone.now().isoformat()
+    }
