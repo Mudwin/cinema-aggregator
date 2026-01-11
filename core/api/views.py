@@ -1,15 +1,19 @@
 import logging
 from typing import List, Optional
 
+from django.db import transaction
 from django.db.models import Q, Avg, Count, Max
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework import status as http_status
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
+from datetime import datetime
 
 from ..models import Film, Person, Rating, FilmPersonRole
 from .serializers import (
@@ -20,7 +24,7 @@ from .serializers import (
     FilmSearchSerializer
 )
 from ..services import TMDBService, OMDbService, KinopoiskService, RatingCalculator
-from ..tasks import fetch_film_data
+from ..tasks import fetch_film_data, update_film_ratings
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +174,167 @@ class FilmSearchView(viewsets.ReadOnlyModelViewSet):
             return Response(
                 {'error': f'Ошибка при импорте: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def import_and_update(self, request):
+        """
+        Импорт фильма из TMDB и немедленное обновление рейтингов.
+        """
+        tmdb_id = request.data.get('tmdb_id')
+        
+        if not tmdb_id:
+            return Response(
+                {'error': 'Параметр tmdb_id обязателен'},
+                status=http_status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            existing_film = Film.objects.filter(tmdb_id=tmdb_id).first()
+            
+            if existing_film:
+                task = update_film_ratings.delay(existing_film.id)
+                return Response({
+                    'status': 'ratings_update_started',
+                    'film_id': existing_film.id,
+                    'task_id': task.id,
+                    'message': f'Обновление рейтингов для фильма "{existing_film.title}" начато'
+                })
+            else:
+                task = fetch_film_data.delay(int(tmdb_id))
+                return Response({
+                    'status': 'import_started',
+                    'task_id': task.id,
+                    'message': f'Импорт фильма с TMDB ID {tmdb_id} начат'
+                })
+                
+        except Exception as e:
+            logger.error(f"Error in import_and_update: {str(e)}")
+            return Response(
+                {'error': f'Ошибка: {str(e)}'},
+                status=http_status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'])
+    def search_combined(self, request):
+        """
+        Комбинированный поиск: сначала в локальной базе, потом во внешних API.
+        """
+        query = request.query_params.get('q', '').strip()
+        year = request.query_params.get('year')
+        
+        if not query:
+            return Response(
+                {'error': 'Параметр поиска (q) обязателен'},
+                status=http_status.HTTP_400_BAD_REQUEST
+            )
+        
+        results = {
+            'query': query,
+            'year': year,
+            'local_results': [],
+            'external_results': [],
+            'suggestions': []
+        }
+        
+        local_qs = Film.objects.filter(
+            Q(title__icontains=query) | 
+            Q(original_title__icontains=query)
+        )
+        
+        if year:
+            local_qs = local_qs.filter(year=year)
+        
+        local_qs = local_qs.order_by('-composite_rating')[:20]
+        
+        if local_qs.exists():
+            serializer = FilmListSerializer(local_qs, many=True, context={'request': request})
+            results['local_results'] = serializer.data
+            results['local_count'] = len(local_qs)
+        
+        if local_qs.count() < 5:
+            try:
+                tmdb_service = TMDBService()
+                search_results = tmdb_service.search_movies(
+                    query=query,
+                    year=int(year) if year else None,
+                    page=int(request.query_params.get('page', 1))
+                )
+                
+                for result in search_results.get('results', [])[:10]:
+                    film_data = self._transform_tmdb_result(result)
+                    results['external_results'].append(film_data)
+                
+                results['external_total'] = search_results.get('total_results', 0)
+                
+            except Exception as e:
+                logger.error(f"Error searching external API: {str(e)}")
+                results['external_error'] = str(e)
+        
+        if local_qs.count() > 0:
+            suggestions = Film.objects.filter(
+                Q(title__icontains=query[:3]) | 
+                Q(original_title__icontains=query[:3])
+            ).exclude(
+                id__in=[film.id for film in local_qs]
+            ).order_by('-composite_rating')[:5]
+            
+            if suggestions.exists():
+                serializer = FilmListSerializer(suggestions, many=True, context={'request': request})
+                results['suggestions'] = serializer.data
+        
+        return Response(results)
+    
+    def _transform_tmdb_result(self, tmdb_data):
+        """
+        Преобразование результата из TMDB в наш формат.
+        """
+        film_data = {
+            'tmdb_id': tmdb_data.get('id'),
+            'title': tmdb_data.get('title', ''),
+            'original_title': tmdb_data.get('original_title', ''),
+            'year': tmdb_data.get('release_date', '')[:4] if tmdb_data.get('release_date') else None,
+            'description': tmdb_data.get('overview', ''),
+            'poster_url': f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path')}" if tmdb_data.get('poster_path') else None,
+            'tmdb_rating': tmdb_data.get('vote_average'),
+            'tmdb_votes': tmdb_data.get('vote_count'),
+            'already_in_db': False,
+            'can_import': True
+        }
+        
+        existing_film = Film.objects.filter(tmdb_id=tmdb_data.get('id')).first()
+        
+        if existing_film:
+            film_data['already_in_db'] = True
+            film_data['db_film_id'] = existing_film.id
+            film_data['db_film_title'] = existing_film.title
+            film_data['db_composite_rating'] = float(existing_film.composite_rating) if existing_film.composite_rating else None
+            film_data['can_import'] = False
+        
+        return film_data
+    
+    @action(detail=False, methods=['get'])
+    def search_trending(self, request):
+        """
+        Поиск популярных фильмов.
+        """
+        try:
+            from ..tasks import search_trending_films
+            
+            limit = int(request.query_params.get('limit', 20))
+            task = search_trending_films.delay(limit)
+            
+            return Response({
+                'status': 'started',
+                'task_id': task.id,
+                'message': f'Поиск {limit} популярных фильмов начат'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error starting trending search: {str(e)}")
+            return Response(
+                {'error': f'Ошибка: {str(e)}'},
+                status=http_status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
@@ -339,3 +504,34 @@ class FilmAutocompleteView(viewsets.GenericViewSet):
             })
         
         return Response({'results': results})
+    
+@api_view(['GET'])
+def search_task_status(request, task_id):
+    """
+    Проверка статуса задачи поиска/импорта.
+    """
+    from celery.result import AsyncResult
+    
+    try:
+        task_result = AsyncResult(task_id)
+        
+        response_data = {
+            'task_id': task_id,
+            'status': task_result.status,
+            'ready': task_result.ready()
+        }
+        
+        if task_result.ready():
+            if task_result.successful():
+                response_data['result'] = task_result.result
+            else:
+                response_data['error'] = str(task_result.result)
+                response_data['traceback'] = task_result.traceback
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Ошибка при проверке статуса задачи: {str(e)}'},
+            status=http_status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

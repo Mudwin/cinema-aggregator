@@ -629,3 +629,110 @@ def check_api_status() -> dict:
         'api_status': api_status,
         'timestamp': timezone.now().isoformat()
     }
+
+@shared_task(
+    bind=True,
+    autoretry_for=(APIRateLimitError, APIRequestError),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 3},
+    default_retry_delay=30
+)
+def search_and_import_film(self, tmdb_id: int) -> dict:
+    """
+    Задача для поиска и импорта фильма.
+    
+    Args:
+        tmdb_id (int): ID фильма в TMDB
+    
+    Returns:
+        dict: Результат импорта
+    """
+    try:
+        from .services.search_service import SearchService
+        
+        search_service = SearchService()
+        film, created = search_service.search_and_import_film(tmdb_id)
+        
+        return {
+            'status': 'success',
+            'created': created,
+            'film_id': film.id,
+            'film_title': film.title,
+            'tmdb_id': tmdb_id,
+            'message': f'Фильм {"импортирован" if created else "уже существует"}: {film.title}'
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to search and import film {tmdb_id}: {str(e)}")
+        self.retry(exc=e)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(APIRateLimitError,),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 2},
+    default_retry_delay=60
+)
+def batch_import_films(self, tmdb_ids: List[int]) -> dict:
+    """
+    Пакетный импорт фильмов.
+    
+    Args:
+        tmdb_ids (List[int]): Список TMDB ID
+    
+    Returns:
+        dict: Статистика импорта
+    """
+    try:
+        from .services.search_service import SearchService
+        
+        search_service = SearchService()
+        stats = search_service.batch_import_films(tmdb_ids)
+        
+        return {
+            'status': 'success',
+            'stats': stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to batch import films: {str(e)}")
+        self.retry(exc=e)
+
+
+@shared_task
+def search_trending_films(limit: int = 20) -> dict:
+    """
+    Поиск и импорт популярных фильмов из TMDB.
+    
+    Args:
+        limit (int): Количество фильмов для импорта
+    
+    Returns:
+        dict: Результаты импорта
+    """
+    try:
+        from .services import TMDBService
+        
+        tmdb_service = TMDBService()
+        
+        trending_data = tmdb_service.get("trending/movie/week", params={"language": "ru-RU"})
+        
+        if not trending_data or 'results' not in trending_data:
+            return {'status': 'error', 'message': 'No trending data found'}
+        
+        trending_films = trending_data['results'][:limit]
+        tmdb_ids = [film['id'] for film in trending_films]
+        
+        task = batch_import_films.delay(tmdb_ids)
+        
+        return {
+            'status': 'started',
+            'task_id': task.id,
+            'total_films': len(tmdb_ids),
+            'message': f'Импорт {len(tmdb_ids)} популярных фильмов начат'
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to search trending films: {str(e)}")
+        return {'status': 'error', 'message': str(e)}
