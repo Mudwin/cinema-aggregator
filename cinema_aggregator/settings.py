@@ -176,10 +176,6 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'PARSER_CLASS': 'redis.connection.HiredisParser',
-        },
         'KEY_PREFIX': 'cinema_aggregator',
         'TIMEOUT': 60 * 60 * 24,  # 24 часа по умолчанию
     }
