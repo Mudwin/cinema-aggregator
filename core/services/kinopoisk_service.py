@@ -47,66 +47,113 @@ class KinopoiskService(BaseAPIClient):
         return self.get("films", params=params)
     
     @api_request_logger
-    def get_movie_rating(self, kinopoisk_id: int) -> Dict:
+    def get_movie_rating(self, film_data: Dict) -> Dict:
         """
         Получение рейтинга фильма с Кинопоиска.
+        
+        Args:
+            film_data (Dict): Данные фильма (может быть dict с kinopoiskId или kinopoisk_id)
+        
+        Returns:
+            dict: Рейтинги Кинопоиска
         """
-        data = self.get_movie_details(kinopoisk_id)
-        
-        ratings = {}
-        
-        # Рейтинг Кинопоиска
-        if "ratingKinopoisk" in data and data["ratingKinopoisk"]:
-            ratings["kinopoisk"] = {
-                "value": float(data["ratingKinopoisk"]),
-                "max_value": 10,
-                "votes": data.get("ratingKinopoiskVoteCount", 0)
-            }
-        
-        # IMDb рейтинг (из Kinopoisk API)
-        if "ratingImdb" in data and data["ratingImdb"]:
-            ratings["imdb"] = {
-                "value": float(data["ratingImdb"]),
-                "max_value": 10,
-                "votes": data.get("ratingImdbVoteCount", 0)
-            }
-        
-        # Рейтинг кинокритиков
-        if "ratingFilmCritics" in data and data["ratingFilmCritics"]:
-            ratings["film_critics"] = {
-                "value": float(data["ratingFilmCritics"]),
-                "max_value": 10,
-                "votes": data.get("ratingFilmCriticsVoteCount", 0)
-            }
-        
-        # Рейтинг ожидания
-        if "ratingAwait" in data and data["ratingAwait"]:
-            ratings["await"] = {
-                "value": float(data["ratingAwait"]),
-                "max_value": 10,
-                "votes": data.get("ratingAwaitCount", 0)
-            }
-        
-        # Рейтинг российских кинокритиков
-        if "ratingRfCritics" in data and data["ratingRfCritics"]:
-            ratings["rf_critics"] = {
-                "value": float(data["ratingRfCritics"]),
-                "max_value": 10,
-                "votes": data.get("ratingRfCriticsVoteCount", 0)
-            }
-        
-        return ratings
+        try:
+            kinopoisk_id = None
+            
+            if isinstance(film_data, dict):
+                if 'kinopoiskId' in film_data:
+                    kinopoisk_id = film_data['kinopoiskId']
+                elif 'kinopoisk_id' in film_data:
+                    kinopoisk_id = film_data['kinopoisk_id']
+                elif 'id' in film_data and isinstance(film_data['id'], int):
+                    kinopoisk_id = film_data['id']
+            elif isinstance(film_data, int):
+                kinopoisk_id = film_data
+            
+            if not kinopoisk_id:
+                logger.warning(f"No kinopoisk_id found in film_data: {film_data}")
+                return {}
+            
+            data = self.get_movie_details(kinopoisk_id)
+            
+            ratings = {}
+            
+            if "ratingKinopoisk" in data and data["ratingKinopoisk"]:
+                ratings["kinopoisk"] = {
+                    "value": float(data["ratingKinopoisk"]),
+                    "max_value": 10,
+                    "votes": data.get("ratingKinopoiskVoteCount", 0)
+                }
+            
+            if "ratingImdb" in data and data["ratingImdb"]:
+                ratings["imdb"] = {
+                    "value": float(data["ratingImdb"]),
+                    "max_value": 10,
+                    "votes": data.get("ratingImdbVoteCount", 0)
+                }
+            
+            if "ratingFilmCritics" in data and data["ratingFilmCritics"]:
+                ratings["film_critics"] = {
+                    "value": float(data["ratingFilmCritics"]),
+                    "max_value": 10,
+                    "votes": data.get("ratingFilmCriticsVoteCount", 0)
+                }
+            
+            return ratings
+            
+        except Exception as e:
+            logger.error(f"Error getting movie rating from Kinopoisk: {str(e)}")
+            return {}
     
     @api_request_logger
-    def get_movie_by_imdb_id(self, imdb_id: str) -> Optional[Dict]:
+    def get_movie_by_imdb_id(self, imdb_id: str, film_title: Optional[str] = None, year: Optional[int] = None) -> Optional[Dict]:
         """
         Поиск фильма по IMDb ID через Kinopoisk API.
+        Пытается найти через поиск по названию, если прямой поиск по IMDb ID не работает.
+        
+        Args:
+            imdb_id (str): IMDb ID фильма
+            film_title (str, optional): Название фильма для поиска
+            year (int, optional): Год выпуска фильма
+        
+        Returns:
+            Optional[Dict]: Информация о фильме
         """
-        search_results = self.search_movies(imdb_id)
+        try:
+            search_results = self.search_movies(imdb_id, year=year, page=1)
+            
+            if "items" in search_results:
+                for film in search_results["items"]:
+                    if film.get("imdbId") == imdb_id:
+                        return film
+            
+            if film_title:
+                clean_title = self._clean_title_for_search(film_title)
+                search_results = self.search_movies(clean_title, year=year, page=1)
+                
+                if "items" in search_results and search_results["items"]:
+                    return search_results["items"][0]
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error searching movie by IMDb ID {imdb_id}: {str(e)}")
+            return None
+
+    def _clean_title_for_search(self, title: str) -> str:
+        """
+        Очистка названия фильма для поиска.
         
-        if "items" in search_results:
-            for film in search_results["items"]:
-                if film.get("imdbId") == imdb_id:
-                    return film
+        Args:
+            title (str): Оригинальное название
         
-        return None
+        Returns:
+            str: Очищенное название для поиска
+        """
+        import re
+        title = re.sub(r'\s*\(\d{4}\)', '', title)
+        title = re.sub(r'\s*\([^)]*\)', '', title)
+        title = re.sub(r'[^\w\s]', ' ', title, flags=re.UNICODE)
+        title = ' '.join(title.split())
+        
+        return title

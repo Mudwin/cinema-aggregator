@@ -105,16 +105,43 @@ class SearchService:
                 logger.error(f"Error fetching OMDb ratings for {film.title}: {str(e)}")
         
         try:
-            kinopoisk_movie = self.kinopoisk_service.get_movie_by_imdb_id(film.imdb_id) if film.imdb_id else None
+            kinopoisk_movie = self.kinopoisk_service.get_movie_by_imdb_id(
+                film.imdb_id, 
+                film_title=film.title,
+                year=film.year
+            )
             
-            if kinopoisk_movie and kinopoisk_movie.get('kinopoiskId'):
-                kinopoisk_id = kinopoisk_movie['kinopoiskId']
-                kp_ratings = self.kinopoisk_service.get_movie_rating(kinopoisk_id)
+            if kinopoisk_movie:
+                kp_ratings = self.kinopoisk_service.get_movie_rating(kinopoisk_movie)
                 
                 if 'kinopoisk' in kp_ratings:
                     ratings_data['kinopoisk'] = kp_ratings['kinopoisk']
+                
+                if 'imdb' in kp_ratings and 'imdb' not in ratings_data:
+                    ratings_data['imdb'] = kp_ratings['imdb']
+            else:
+                logger.warning(f"Film not found in Kinopoisk: {film.title} (IMDb: {film.imdb_id})")
+                
         except Exception as e:
             logger.error(f"Error fetching Kinopoisk ratings for {film.title}: {str(e)}")
+        
+        if 'kinopoisk' not in ratings_data and film.title:
+            try:
+                search_results = self.kinopoisk_service.search_movies(
+                    film.title, 
+                    year=film.year,
+                    page=1
+                )
+                
+                if "items" in search_results and search_results["items"]:
+                    kinopoisk_movie = search_results["items"][0]
+                    kp_ratings = self.kinopoisk_service.get_movie_rating(kinopoisk_movie)
+                    
+                    if 'kinopoisk' in kp_ratings:
+                        ratings_data['kinopoisk'] = kp_ratings['kinopoisk']
+                        
+            except Exception as e:
+                logger.error(f"Error searching Kinopoisk by title for {film.title}: {str(e)}")
         
         self._save_ratings_to_db(film, ratings_data)
         

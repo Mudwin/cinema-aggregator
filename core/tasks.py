@@ -18,17 +18,11 @@ logger = logging.getLogger(__name__)
     autoretry_for=(APIRateLimitError, APIRequestError),
     retry_backoff=True,
     retry_kwargs={'max_retries': 3},
-    default_retry_delay=60  # 60 секунд
+    default_retry_delay=60
 )
 def update_film_ratings(self, film_id: int) -> dict:
     """
     Задача для обновления рейтингов фильма из различных источников.
-    
-    Args:
-        film_id (int): ID фильма в нашей базе данных
-    
-    Returns:
-        dict: Статистика обновления
     """
     try:
         film = Film.objects.get(id=film_id)
@@ -37,6 +31,8 @@ def update_film_ratings(self, film_id: int) -> dict:
         return {'status': 'error', 'message': f'Film with id {film_id} not found'}
     
     logger.info(f"Starting update ratings for film: {film.title} (ID: {film_id})")
+    
+    from ..services import TMDBService, OMDbService, KinopoiskService, RatingCalculator
     
     tmdb_service = TMDBService()
     omdb_service = OMDbService()
@@ -51,13 +47,6 @@ def update_film_ratings(self, film_id: int) -> dict:
     }
     
     try:
-        movie_details = tmdb_service.get_movie_details(film.tmdb_id)
-        
-        if not film.imdb_id and movie_details.get('imdb_id'):
-            film.imdb_id = movie_details.get('imdb_id')
-            film.save(update_fields=['imdb_id'])
-            logger.info(f"Updated IMDb ID for film {film.title}: {film.imdb_id}")
-    
         if film.imdb_id:
             try:
                 omdb_ratings = omdb_service.get_movie_ratings(film.imdb_id)
@@ -92,11 +81,26 @@ def update_film_ratings(self, film_id: int) -> dict:
                 logger.error(f"Error updating OMDb ratings for {film.title}: {str(e)}")
         
         try:
-            kp_movie = kinopoisk_service.get_movie_by_imdb_id(film.imdb_id) if film.imdb_id else None
+            kinopoisk_movie = None
             
-            if kp_movie and kp_movie.get('kinopoiskId'):
-                kinopoisk_id = kp_movie['kinopoiskId']
-                kp_ratings = kinopoisk_service.get_movie_rating(kinopoisk_id)
+            if film.imdb_id:
+                kinopoisk_movie = kinopoisk_service.get_movie_by_imdb_id(
+                    film.imdb_id, 
+                    film_title=film.title,
+                    year=film.year
+                )
+            
+            if not kinopoisk_movie and film.title:
+                search_results = kinopoisk_service.search_movies(
+                    film.title, 
+                    year=film.year,
+                    page=1
+                )
+                if "items" in search_results and search_results["items"]:
+                    kinopoisk_movie = search_results["items"][0]
+            
+            if kinopoisk_movie:
+                kp_ratings = kinopoisk_service.get_movie_rating(kinopoisk_movie)
                 
                 if 'kinopoisk' in kp_ratings:
                     rating_data = kp_ratings['kinopoisk']
@@ -117,6 +121,24 @@ def update_film_ratings(self, film_id: int) -> dict:
                     
                     stats['sources'].append(Rating.SourceChoices.KINOPOISK)
                     logger.debug(f"Updated Kinopoisk rating for {film.title}: {rating_data['value']}")
+                    
+                if 'imdb' in kp_ratings and film.imdb_id:
+                    rating_data = kp_ratings['imdb']
+                    rating, created = Rating.objects.update_or_create(
+                        film=film,
+                        source=Rating.SourceChoices.IMDB,
+                        defaults={
+                            'value': rating_data['value'],
+                            'max_value': rating_data['max_value'],
+                            'votes_count': rating_data.get('votes', 0)
+                        }
+                    )
+                    
+                    if created:
+                        stats['ratings_created'] += 1
+                    else:
+                        stats['ratings_updated'] += 1
+                        
         except Exception as e:
             logger.error(f"Error updating Kinopoisk ratings for {film.title}: {str(e)}")
         
