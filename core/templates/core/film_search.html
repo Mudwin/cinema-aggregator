@@ -1,0 +1,197 @@
+{% extends 'core/base.html' %}
+{% block title %}Поиск фильмов{% endblock %}
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12">
+    <h1 class="mb-3"><i class="bi bi-search"></i> Поиск фильмов</h1>
+    <p class="lead">
+      Найдите фильм по названию и получите рейтинги из всех источников
+    </p>
+  </div>
+</div>
+
+<!-- Форма поиска -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'film_search' %}" class="row g-3">
+      <div class="col-md-8">
+        <label for="query" class="form-label">Название фильма</label>
+        <input
+          type="text"
+          class="form-control form-control-lg"
+          id="query"
+          name="q"
+          value="{{ query|default:'' }}"
+          placeholder="Введите название фильма..."
+          required
+        />
+      </div>
+      <div class="col-md-3">
+        <label for="year" class="form-label">Год выпуска (опционально)</label>
+        <input
+          type="number"
+          class="form-control form-control-lg"
+          id="year"
+          name="year"
+          value="{{ year|default:'' }}"
+          placeholder="Например: 1999"
+          min="1900"
+          max="{% now 'Y' %}"
+        />
+      </div>
+      <div class="col-md-1 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary btn-lg w-100">
+          <i class="bi bi-search"></i> Найти
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Результаты поиска -->
+{% if query %}
+<div class="row mb-3">
+  <div class="col-12">
+    <h3>
+      Результаты поиска для "{{ query }}" {% if year %}( {{ year }} год ){% endif %}
+    </h3>
+
+    {% if external_search %}
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle"></i>
+      Фильмы из внешних источников. Нажмите "Импортировать", чтобы добавить в
+      нашу базу и получить рейтинги.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if films %}
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
+  {% for film in films %}
+  <div class="col">
+    <div class="card film-card">
+      {% if film.poster_url %}
+      <img
+        src="{{ film.poster_url }}"
+        class="card-img-top film-poster"
+        alt="{{ film.title }}"
+      />
+      {% else %}
+      <div
+        class="film-poster bg-secondary d-flex align-items-center justify-content-center"
+      >
+        <i class="bi bi-film" style="font-size: 3rem; color: white"></i>
+      </div>
+      {% endif %}
+      {% if film.composite_rating %}
+      <div class="rating-badge">{{ film.composite_rating|floatformat:1 }}</div>
+      {% endif %}
+
+      <div class="card-body">
+        <h5 class="card-title">{{ film.title }}</h5>
+        <p class="card-text text-muted">
+          {{ film.year }} {% if film.original_title and film.original_title != film.title %}
+          <br /><small>({{ film.original_title }})</small>
+          {% endif %}
+        </p>
+
+        {% if film.ratings %}
+        <div class="mb-2">
+          {% for rating in film.ratings %}
+          {% if rating.source == 'imdb' %}
+          <span class="badge bg-warning me-1 mb-1">{{ rating.source|upper }}: {{ rating.value }}</span>
+          {% elif rating.source == 'kinopoisk' %}
+          <span class="badge bg-danger me-1 mb-1">{{ rating.source|upper }}: {{ rating.value }}</span>
+          {% elif rating.source == 'rotten_tomatoes' %}
+          <span class="badge bg-success me-1 mb-1">{{ rating.source|upper }}: {{ rating.value }}</span>
+          {% else %}
+          <span class="badge bg-info me-1 mb-1">{{ rating.source|upper }}: {{ rating.value }}</span>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if film.can_import %}
+        <form method="post" action="{% url 'film_import' %}" class="mt-2">
+          {% csrf_token %}
+          <input type="hidden" name="tmdb_id" value="{{ film.tmdb_id }}" />
+          <button type="submit" class="btn btn-sm btn-outline-success w-100">
+            <i class="bi bi-download"></i> Импортировать
+          </button>
+        </form>
+        {% else %}
+        <a href="{% url 'film_detail' film.id %}" class="btn btn-primary w-100">
+          <i class="bi bi-info-circle"></i> Подробнее
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% elif not films and not external_search %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i>
+  Фильмы не найдены в нашей базе. Попробуйте поискать во внешних источниках.
+</div>
+
+<div class="text-center mt-4">
+  <a
+    href="{% url 'film_search_external' %}?q={{ query }}{% if year %}&year={{ year }}{% endif %}"
+    class="btn btn-lg btn-outline-primary"
+  >
+    <i class="bi bi-search"></i> Искать во внешних источниках
+  </a>
+</div>
+
+{% else %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i>
+  Фильмы не найдены.
+</div>
+{% endif %}
+{% else %}
+<!-- Инструкция при первом заходе -->
+<div class="row mt-5">
+  <div class="col-md-8 offset-md-2">
+    <div class="card">
+      <div class="card-body text-center">
+        <i
+          class="bi bi-search-heart"
+          style="font-size: 4rem; color: var(--primary-color)"
+        ></i>
+        <h3 class="mt-3">Как использовать поиск</h3>
+        <p class="lead">Введите название фильма в поле выше</p>
+
+        <div class="row mt-4">
+          <div class="col-md-6 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <h5>
+                  <i class="bi bi-1-circle text-primary"></i> Поиск в нашей базе
+                </h5>
+                <p>
+                  Сначала мы ищем фильмы, которые уже есть в нашей базе данных
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <h5>
+                  <i class="bi bi-2-circle text-primary"></i> Поиск во внешних
+                  источниках
+                </h5>
+                <p>Если не нашли - ищем в TMDB и предлагаем импортировать</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

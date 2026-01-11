@@ -1,0 +1,122 @@
+{% extends 'core/base.html' %} {% block title %}Главная страница{% endblock %}
+{% block content %}
+<div class="hero-section text-center">
+  <h1 class="display-4 mb-4">Cinema Aggregator</h1>
+  <p class="lead mb-4">
+    Сравнивайте оценки фильмов из разных источников в одном месте
+  </p>
+  <p class="mb-4">IMDb • Rotten Tomatoes • Metacritic • Кинопоиск</p>
+</div>
+
+<div class="row g-4">
+  <!-- Карточка поиска по фильмам -->
+  <div class="col-md-4">
+    <div class="card search-card h-100 text-center">
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <i class="bi bi-search search-icon"></i>
+        </div>
+        <h3 class="card-title">Поиск фильмов</h3>
+        <p class="card-text">
+          Найдите любой фильм по названию. Получите рейтинги из 4 источников и
+          детальную информацию.
+        </p>
+        <a href="{% url 'film_search' %}" class="btn btn-primary btn-lg mt-3">
+          <i class="bi bi-play-circle"></i> Начать поиск
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Карточка поиска по персонам -->
+  <div class="col-md-4">
+    <div class="card search-card h-100 text-center">
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <i class="bi bi-people search-icon"></i>
+        </div>
+        <h3 class="card-title">Поиск персон</h3>
+        <p class="card-text">
+          Найдите актеров и режиссеров. Узнайте их фильмографию и статистику
+          сотрудничества.
+        </p>
+        <a href="#" class="btn btn-secondary btn-lg mt-3 disabled">
+          <i class="bi bi-clock"></i> Скоро
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Карточка поиска по годам -->
+  <div class="col-md-4">
+    <div class="card search-card h-100 text-center">
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <i class="bi bi-calendar search-icon"></i>
+        </div>
+        <h3 class="card-title">Поиск по годам</h3>
+        <p class="card-text">
+          Найдите лучшие фильмы по году или диапазону лет. Отсортировано по
+          рейтингу.
+        </p>
+        <a href="#" class="btn btn-secondary btn-lg mt-3 disabled">
+          <i class="bi bi-clock"></i> Скоро
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Информация о проекте -->
+<div class="row mt-5">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h3 class="card-title">Как это работает?</h3>
+        <div class="row mt-4">
+          <div class="col-md-3 mb-3">
+            <div class="text-center">
+              <i
+                class="bi bi-database"
+                style="font-size: 2rem; color: var(--primary-color)"
+              ></i>
+              <h5 class="mt-2">Агрегация данных</h5>
+              <p>Собираем рейтинги из 4 авторитетных источников</p>
+            </div>
+          </div>
+          <div class="col-md-3 mb-3">
+            <div class="text-center">
+              <i
+                class="bi bi-calculator"
+                style="font-size: 2rem; color: var(--primary-color)"
+              ></i>
+              <h5 class="mt-2">Объективные оценки</h5>
+              <p>Рассчитываем средний рейтинг на основе всех источников</p>
+            </div>
+          </div>
+          <div class="col-md-3 mb-3">
+            <div class="text-center">
+              <i
+                class="bi bi-graph-up"
+                style="font-size: 2rem; color: var(--primary-color)"
+              ></i>
+              <h5 class="mt-2">Анализ и сравнение</h5>
+              <p>Сравнивайте оценки из разных источников на одной странице</p>
+            </div>
+          </div>
+          <div class="col-md-3 mb-3">
+            <div class="text-center">
+              <i
+                class="bi bi-lightning-charge"
+                style="font-size: 2rem; color: var(--primary-color)"
+              ></i>
+              <h5 class="mt-2">Быстрый поиск</h5>
+              <p>Найдите фильм за секунды по названию или году</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
