@@ -1,49 +1,39 @@
-import requests
+import logging
+from typing import Optional, Dict
+
 from django.conf import settings
+from .base_api import BaseAPIClient, api_request_logger
+
+logger = logging.getLogger(__name__)
 
 
-class KinopoiskService:
+class KinopoiskService(BaseAPIClient):
     """
     Сервис для работы с неофициальным Kinopoisk API.
     """
     
     BASE_URL = "https://kinopoiskapiunofficial.tech/api/v2.2"
+    CACHE_TIMEOUT = 3600 * 6  # 6 часов для Kinopoisk
     
-    def __init__(self):
-        self.api_key = settings.KINOPOISK_API_KEY
-        self.headers = {
-            "X-API-KEY": self.api_key,
+    def setup_session(self):
+        """Настройка сессии для Kinopoisk API"""
+        super().setup_session()
+        self.session.headers.update({
+            "X-API-KEY": settings.KINOPOISK_API_KEY,
             "Content-Type": "application/json"
-        }
+        })
     
-    def get_movie_details(self, kinopoisk_id):
+    @api_request_logger
+    def get_movie_details(self, kinopoisk_id: int) -> Dict:
         """
         Получение детальной информации о фильме по Kinopoisk ID.
-        
-        Args:
-            kinopoisk_id (int): ID фильма в Kinopoisk
-        
-        Returns:
-            dict: Информация о фильме
         """
-        response = requests.get(
-            f"{self.BASE_URL}/films/{kinopoisk_id}",
-            headers=self.headers
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get(f"films/{kinopoisk_id}")
     
-    def search_movies(self, query, year=None, page=1):
+    @api_request_logger
+    def search_movies(self, query: str, year: Optional[int] = None, page: int = 1) -> Dict:
         """
         Поиск фильмов по названию.
-        
-        Args:
-            query (str): Поисковый запрос
-            year (int, optional): Год выпуска
-            page (int): Номер страницы
-        
-        Returns:
-            dict: Результаты поиска
         """
         params = {
             "keyword": query,
@@ -54,23 +44,12 @@ class KinopoiskService:
             params["yearFrom"] = year
             params["yearTo"] = year
             
-        response = requests.get(
-            f"{self.BASE_URL}/films",
-            headers=self.headers,
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get("films", params=params)
     
-    def get_movie_rating(self, kinopoisk_id):
+    @api_request_logger
+    def get_movie_rating(self, kinopoisk_id: int) -> Dict:
         """
         Получение рейтинга фильма с Кинопоиска.
-        
-        Args:
-            kinopoisk_id (int): ID фильма в Kinopoisk
-        
-        Returns:
-            dict: Рейтинги Кинопоиска
         """
         data = self.get_movie_details(kinopoisk_id)
         
@@ -118,15 +97,10 @@ class KinopoiskService:
         
         return ratings
     
-    def get_movie_by_imdb_id(self, imdb_id):
+    @api_request_logger
+    def get_movie_by_imdb_id(self, imdb_id: str) -> Optional[Dict]:
         """
         Поиск фильма по IMDb ID через Kinopoisk API.
-        
-        Args:
-            imdb_id (str): IMDb ID фильма
-        
-        Returns:
-            dict: Информация о фильме
         """
         search_results = self.search_movies(imdb_id)
         

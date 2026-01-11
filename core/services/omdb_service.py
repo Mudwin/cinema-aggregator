@@ -1,85 +1,65 @@
-import requests
+import logging
+from typing import Optional, Dict
+
 from django.conf import settings
+from .base_api import BaseAPIClient, api_request_logger
+
+logger = logging.getLogger(__name__)
 
 
-class OMDbService:
+class OMDbService(BaseAPIClient):
     """
     Сервис для работы с OMDb API (получение рейтингов IMDb, Rotten Tomatoes, Metacritic).
     """
     
-    BASE_URL = "http://www.omdbapi.com/"
+    BASE_URL = "http://www.omdbapi.com"
+    CACHE_TIMEOUT = 3600 * 12  # 12 часов для OMDb
     
-    def __init__(self):
-        self.api_key = settings.OMDB_API_KEY
+    def setup_session(self):
+        """Настройка сессии для OMDb API"""
+        super().setup_session()
     
-    def get_movie_by_id(self, imdb_id):
+    @api_request_logger
+    def get_movie_by_id(self, imdb_id: str) -> Dict:
         """
         Получение информации о фильме по IMDb ID.
-        
-        Args:
-            imdb_id (str): IMDb ID фильма (например: 'tt0111161')
-        
-        Returns:
-            dict: Информация о фильме
         """
         params = {
             "i": imdb_id,
-            "apikey": self.api_key
+            "apikey": settings.OMDB_API_KEY
         }
         
-        response = requests.get(self.BASE_URL, params=params)
-        response.raise_for_status()
-        return response.json()
+        return self.get("/", params=params)
     
-    def get_movie_by_title(self, title):
+    @api_request_logger
+    def get_movie_by_title(self, title: str) -> Dict:
         """
         Получение информации о фильме по названию.
-        
-        Args:
-            title (str): Название фильма
-        
-        Returns:
-            dict: Информация о фильме
         """
         params = {
             "t": title,
-            "apikey": self.api_key
+            "apikey": settings.OMDB_API_KEY
         }
         
-        response = requests.get(self.BASE_URL, params=params)
-        response.raise_for_status()
-        return response.json()
+        return self.get("/", params=params)
     
-    def search_movies(self, query, page=1):
+    @api_request_logger
+    def search_movies(self, query: str, page: int = 1) -> Dict:
         """
         Поиск фильмов по названию.
-        
-        Args:
-            query (str): Поисковый запрос
-            page (int): Номер страницы
-        
-        Returns:
-            dict: Результаты поиска
         """
         params = {
             "s": query,
             "page": page,
-            "apikey": self.api_key
+            "apikey": settings.OMDB_API_KEY
         }
         
-        response = requests.get(self.BASE_URL, params=params)
-        response.raise_for_status()
-        return response.json()
+        return self.get("/", params=params)
     
-    def get_movie_ratings(self, imdb_id):
+    @api_request_logger
+    def get_movie_ratings(self, imdb_id: str) -> Dict:
         """
         Получение рейтингов фильма по IMDb ID.
-        
-        Args:
-            imdb_id (str): IMDb ID фильма (например: 'tt0111161')
-        
-        Returns:
-            dict: Рейтинги из различных источников
         """
         data = self.get_movie_by_id(imdb_id)
         
@@ -88,7 +68,7 @@ class OMDbService:
         
         ratings = {}
         
-        # IMDb 
+        # IMDb рейтинг
         if "imdbRating" in data and data["imdbRating"] != "N/A":
             votes = data.get("imdbVotes", "0").replace(",", "")
             ratings["imdb"] = {
@@ -97,7 +77,7 @@ class OMDbService:
                 "votes": int(votes) if votes.isdigit() else 0
             }
         
-        # Metacritic
+        # Metacritic рейтинг
         if "Metascore" in data and data["Metascore"] != "N/A":
             ratings["metacritic"] = {
                 "value": float(data["Metascore"]),
@@ -111,15 +91,16 @@ class OMDbService:
                 value = rating["Value"]
                 
                 if "Rotten Tomatoes" in source:
-                    # Rotten Tomatoes
+                    # Rotten Tomatoes: "89%"
                     if "%" in value:
                         ratings["rotten_tomatoes"] = {
                             "value": float(value.replace("%", "")),
                             "max_value": 100
                         }
                 
+                # Metacritic в массиве Ratings
                 elif "Metacritic" in source:
-                    # Metacritic
+                    # Metacritic: "94/100"
                     if "/" in value:
                         val, max_val = value.split("/")
                         ratings["metacritic"] = {

@@ -1,33 +1,32 @@
-import requests
+import logging
+from typing import Optional, Dict
+
 from django.conf import settings
+from .base_api import BaseAPIClient, api_request_logger
+
+logger = logging.getLogger(__name__)
 
 
-class TMDBService:
+class TMDBService(BaseAPIClient):
     """
     Сервис для работы с The Movie Database (TMDB) API.
     """
     
     BASE_URL = "https://api.themoviedb.org/3"
+    CACHE_TIMEOUT = 3600 * 24  # 24 часа для TMDB 
     
-    def __init__(self):
-        self.api_key = settings.TMDB_API_KEY
-        self.headers = {
+    def setup_session(self):
+        """Настройка сессии для TMDB API"""
+        super().setup_session()
+        self.session.headers.update({
             "accept": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
+            "Authorization": f"Bearer {settings.TMDB_API_KEY}"
+        })
     
-    def search_movies(self, query, year=None, page=1, language='ru-RU'):
+    @api_request_logger
+    def search_movies(self, query: str, year: Optional[int] = None, page: int = 1, language: str = 'ru-RU') -> Dict:
         """
         Поиск фильмов по названию.
-        
-        Args:
-            query (str): Поисковый запрос
-            year (int, optional): Год выпуска
-            page (int): Номер страницы
-            language (str): Язык ответа
-        
-        Returns:
-            dict: Результаты поиска
         """
         params = {
             "query": query,
@@ -38,49 +37,23 @@ class TMDBService:
         if year:
             params["year"] = year
             
-        response = requests.get(
-            f"{self.BASE_URL}/search/movie",
-            headers=self.headers,
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get("search/movie", params=params)
     
-    def get_movie_details(self, tmdb_id, append_to_response=None, language='ru-RU'):
+    @api_request_logger
+    def get_movie_details(self, tmdb_id: int, append_to_response: Optional[str] = None, language: str = 'ru-RU') -> Dict:
         """
         Получение детальной информации о фильме.
-        
-        Args:
-            tmdb_id (int): ID фильма в TMDB
-            append_to_response (str, optional): Дополнительные данные (videos,credits и т.д.)
-            language (str): Язык ответа
-        
-        Returns:
-            dict: Информация о фильме
         """
         params = {"language": language}
         if append_to_response:
             params["append_to_response"] = append_to_response
             
-        response = requests.get(
-            f"{self.BASE_URL}/movie/{tmdb_id}",
-            headers=self.headers,
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get(f"movie/{tmdb_id}", params=params)
     
-    def search_person(self, query, page=1, language='ru-RU'):
+    @api_request_logger
+    def search_person(self, query: str, page: int = 1, language: str = 'ru-RU') -> Dict:
         """
         Поиск персоны по имени.
-        
-        Args:
-            query (str): Поисковый запрос
-            page (int): Номер страницы
-            language (str): Язык ответа
-        
-        Returns:
-            dict: Результаты поиска
         """
         params = {
             "query": query,
@@ -89,73 +62,31 @@ class TMDBService:
             "include_adult": "false"
         }
             
-        response = requests.get(
-            f"{self.BASE_URL}/search/person",
-            headers=self.headers,
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get("search/person", params=params)
     
-    def get_person_details(self, tmdb_id, language='ru-RU'):
+    @api_request_logger
+    def get_person_details(self, tmdb_id: int, language: str = 'ru-RU') -> Dict:
         """
         Получение детальной информации о персоне.
-        
-        Args:
-            tmdb_id (int): ID персоны в TMDB
-            language (str): Язык ответа
-        
-        Returns:
-            dict: Информация о персоне
         """
         params = {"language": language}
         
-        response = requests.get(
-            f"{self.BASE_URL}/person/{tmdb_id}",
-            headers=self.headers,
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get(f"person/{tmdb_id}", params=params)
     
-    def get_person_movie_credits(self, tmdb_id, language='ru-RU'):
+    @api_request_logger
+    def get_person_movie_credits(self, tmdb_id: int, language: str = 'ru-RU') -> Dict:
         """
         Получение фильмографии персоны.
-        
-        Args:
-            tmdb_id (int): ID персоны в TMDB
-            language (str): Язык ответа
-        
-        Returns:
-            dict: Фильмография персоны
         """
         params = {"language": language}
         
-        response = requests.get(
-            f"{self.BASE_URL}/person/{tmdb_id}/movie_credits",
-            headers=self.headers,
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get(f"person/{tmdb_id}/movie_credits", params=params)
     
-    def get_movie_credits(self, tmdb_id, language='ru-RU'):
+    @api_request_logger
+    def get_movie_credits(self, tmdb_id: int, language: str = 'ru-RU') -> Dict:
         """
         Получение информации о съемочной группе и актерах.
-        
-        Args:
-            tmdb_id (int): ID фильма в TMDB
-            language (str): Язык ответа
-        
-        Returns:
-            dict: Информация о съемочной группе
         """
         params = {"language": language}
         
-        response = requests.get(
-            f"{self.BASE_URL}/movie/{tmdb_id}/credits",
-            headers=self.headers,
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+        return self.get(f"movie/{tmdb_id}/credits", params=params)

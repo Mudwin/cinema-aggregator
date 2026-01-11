@@ -1,0 +1,320 @@
+import logging
+import time
+from functools import wraps
+from typing import Optional, Dict, Any
+
+import requests
+from django.core.cache import cache
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+class APIClientError(Exception):
+    """Базовое исключение для ошибок API клиента"""
+    pass
+
+
+class APIRequestError(APIClientError):
+    """Исключение для ошибок запросов к API"""
+    pass
+
+
+class APIRateLimitError(APIClientError):
+    """Исключение для превышения лимита запросов"""
+    pass
+
+
+class BaseAPIClient:
+    """
+    Базовый класс для всех API клиентов.
+    Обеспечивает обработку ошибок, логирование, кэширование и retry механизм.
+    """
+    
+    BASE_URL: str = None
+    DEFAULT_TIMEOUT: int = 10
+    DEFAULT_RETRIES: int = 3
+    RETRY_DELAY: float = 1.0  # секунды
+    CACHE_TIMEOUT: int = 3600  
+    
+    def __init__(self):
+        if not self.BASE_URL:
+            raise ValueError("BASE_URL должен быть определен в дочернем классе")
+        
+        self.session = requests.Session()
+        self.setup_session()
+        
+    def setup_session(self):
+        """Настройка сессии (заголовки, авторизация и т.д.)"""
+        self.session.headers.update({
+            'User-Agent': 'CinemaAggregator/1.0',
+            'Accept': 'application/json',
+        })
+    
+    def get_cache_key(self, method: str, params: Dict) -> str:
+        """
+        Генерация ключа для кэша на основе метода и параметров.
+        
+        Args:
+            method (str): HTTP метод
+            params (Dict): Параметры запроса
+        
+        Returns:
+            str: Ключ для кэша
+        """
+        import hashlib
+        import json
+        
+        cache_str = f"{method}:{self.BASE_URL}:{json.dumps(params, sort_keys=True)}"
+        return f"api_cache:{hashlib.md5(cache_str.encode()).hexdigest()}"
+    
+    def should_cache_request(self, method: str, params: Dict) -> bool:
+        """
+        Определяет, нужно ли кэшировать запрос.
+        По умолчанию кэшируем только GET запросы.
+        
+        Args:
+            method (str): HTTP метод
+            params (Dict): Параметры запроса
+        
+        Returns:
+            bool: Нужно ли кэшировать запрос
+        """
+        return method.upper() == 'GET'
+    
+    def handle_error(self, response: requests.Response, url: str, params: Dict):
+        """
+        Обработка ошибок HTTP запросов.
+        
+        Args:
+            response (requests.Response): Ответ сервера
+            url (str): URL запроса
+            params (Dict): Параметры запроса
+        
+        Raises:
+            APIRequestError: Общая ошибка запроса
+            APIRateLimitError: Превышение лимита запросов
+        """
+        status_code = response.status_code
+        
+        if status_code == 429:  # Too Many Requests
+            logger.warning(f"Rate limit exceeded for {url}")
+            raise APIRateLimitError(f"Превышен лимит запросов к API. URL: {url}")
+        
+        elif 400 <= status_code < 500:
+            logger.error(f"Client error {status_code} for {url}: {response.text}")
+            raise APIRequestError(
+                f"Ошибка клиента {status_code} при запросе к {url}. "
+                f"Ответ: {response.text[:200]}"
+            )
+        
+        elif status_code >= 500:
+            logger.error(f"Server error {status_code} for {url}")
+            raise APIRequestError(
+                f"Ошибка сервера {status_code} при запросе к {url}"
+            )
+    
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        data: Optional[Dict] = None,
+        headers: Optional[Dict] = None,
+        timeout: Optional[int] = None,
+        use_cache: bool = True,
+        cache_timeout: Optional[int] = None,
+        retries: Optional[int] = None,
+    ) -> Dict:
+        """
+        Основной метод для выполнения HTTP запросов с кэшированием и retry.
+        
+        Args:
+            method (str): HTTP метод (GET, POST, etc.)
+            endpoint (str): Конечная точка API
+            params (Dict): Параметры запроса
+            data (Dict): Данные для POST/PUT запросов
+            headers (Dict): Дополнительные заголовки
+            timeout (int): Таймаут запроса
+            use_cache (bool): Использовать ли кэширование
+            cache_timeout (int): Время жизни кэша в секундах
+            retries (int): Количество повторных попыток
+        
+        Returns:
+            Dict: Ответ API в формате JSON
+        
+        Raises:
+            APIRequestError: При ошибках запроса
+            APIRateLimitError: При превышении лимита запросов
+        """
+        if params is None:
+            params = {}
+        if headers is None:
+            headers = {}
+        
+        url = f"{self.BASE_URL.rstrip('/')}/{endpoint.lstrip('/')}"
+        timeout = timeout or self.DEFAULT_TIMEOUT
+        retries = retries or self.DEFAULT_RETRIES
+        cache_timeout = cache_timeout or self.CACHE_TIMEOUT
+        
+        cache_key = None
+        if use_cache and self.should_cache_request(method, params):
+            cache_key = self.get_cache_key(method, params)
+            cached_response = cache.get(cache_key)
+            if cached_response:
+                logger.debug(f"Cache hit for {url}")
+                return cached_response
+        
+        last_exception = None
+        
+        for attempt in range(retries):
+            try:
+                request_headers = self.session.headers.copy()
+                request_headers.update(headers)
+                
+                logger.info(f"API Request: {method} {url} (attempt {attempt + 1}/{retries})")
+                logger.debug(f"Params: {params}")
+                logger.debug(f"Headers: {request_headers}")
+                
+                response = self.session.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=data,
+                    headers=request_headers,
+                    timeout=timeout,
+                )
+                
+                logger.debug(f"Response status: {response.status_code}")
+                
+                if response.status_code >= 400:
+                    self.handle_error(response, url, params)
+                
+                try:
+                    result = response.json()
+                except ValueError as e:
+                    logger.error(f"Failed to parse JSON response from {url}: {response.text[:200]}")
+                    raise APIRequestError(f"Не удалось распарсить JSON ответ: {str(e)}")
+                
+                if cache_key:
+                    cache.set(cache_key, result, cache_timeout)
+                    logger.debug(f"Response cached with key: {cache_key}")
+                
+                return result
+                
+            except APIRateLimitError:
+                wait_time = self.RETRY_DELAY * (attempt + 1) * 2
+                logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry...")
+                time.sleep(wait_time)
+                last_exception = APIRateLimitError
+                
+            except (APIRequestError, requests.exceptions.RequestException) as e:
+                last_exception = e
+                if attempt < retries - 1:
+                    wait_time = self.RETRY_DELAY * (attempt + 1)
+                    logger.warning(f"Request failed: {str(e)}. Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Request failed after {retries} attempts: {str(e)}")
+                    raise APIRequestError(f"Запрос не удался после {retries} попыток: {str(e)}")
+        
+        raise APIRequestError(f"Все {retries} попытки запроса не удались. Последняя ошибка: {last_exception}")
+    
+    def get(
+        self,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        **kwargs
+    ) -> Dict:
+        """
+        Выполнение GET запроса.
+        
+        Args:
+            endpoint (str): Конечная точка API
+            params (Dict): Параметры запроса
+            **kwargs: Дополнительные аргументы для _make_request
+        
+        Returns:
+            Dict: Ответ API
+        """
+        return self._make_request('GET', endpoint, params=params, **kwargs)
+    
+    def post(
+        self,
+        endpoint: str,
+        data: Optional[Dict] = None,
+        **kwargs
+    ) -> Dict:
+        """
+        Выполнение POST запроса.
+        
+        Args:
+            endpoint (str): Конечная точка API
+            data (Dict): Данные для отправки
+            **kwargs: Дополнительные аргументы для _make_request
+        
+        Returns:
+            Dict: Ответ API
+        """
+        return self._make_request('POST', endpoint, data=data, **kwargs)
+    
+    def clear_cache_for_request(self, method: str, params: Dict):
+        """
+        Очистка кэша для конкретного запроса.
+        
+        Args:
+            method (str): HTTP метод
+            params (Dict): Параметры запроса
+        """
+        cache_key = self.get_cache_key(method, params)
+        cache.delete(cache_key)
+        logger.debug(f"Cache cleared for key: {cache_key}")
+    
+    def clear_all_cache(self):
+        """
+        Очистка всего кэша для этого API клиента.
+        Внимание: эта операция может быть медленной!
+        """
+        from django.core.cache import cache
+        
+        keys_to_delete = []
+        
+        for key in cache._cache.keys():
+            if isinstance(key, str) and key.startswith('api_cache:'):
+                keys_to_delete.append(key)
+        
+        cache.delete_many(keys_to_delete)
+        logger.info(f"Cleared {len(keys_to_delete)} cache entries")
+
+
+def api_request_logger(func):
+    """
+    Декоратор для логирования вызовов API методов.
+    
+    Args:
+        func: Функция для декорирования
+    
+    Returns:
+        Декорированная функция
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        logger.info(f"Calling API method: {func.__name__}")
+        logger.debug(f"Args: {args}, Kwargs: {kwargs}")
+        
+        start_time = time.time()
+        try:
+            result = func(*args, **kwargs)
+            elapsed_time = time.time() - start_time
+            
+            logger.info(f"API method {func.__name__} completed in {elapsed_time:.2f}s")
+            logger.debug(f"Result type: {type(result)}")
+            
+            return result
+            
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error(f"API method {func.__name__} failed after {elapsed_time:.2f}s: {str(e)}")
+            raise
+    
+    return wrapper
