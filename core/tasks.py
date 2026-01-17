@@ -758,3 +758,34 @@ def search_trending_films(limit: int = 20) -> dict:
     except Exception as e:
         logger.error(f"Failed to search trending films: {str(e)}")
         return {'status': 'error', 'message': str(e)}
+    
+
+@shared_task
+def quick_import_film(tmdb_id: int) -> dict:
+    """
+    Быстрый импорт фильма (синхронный внутри задачи).
+    
+    Args:
+        tmdb_id (int): TMDB ID фильма
+    
+    Returns:
+        dict: Результат импорта
+    """
+    try:
+        from .services.search_service import SearchService
+        
+        search_service = SearchService()
+        film, created = search_service.search_and_import_film(tmdb_id)
+        
+        return {
+            'status': 'success',
+            'created': created,
+            'film_id': film.id,
+            'film_title': film.title,
+            'tmdb_id': tmdb_id,
+            'ratings_count': film.ratings.count()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to quick import film {tmdb_id}: {str(e)}")
+        return {'status': 'error', 'message': str(e)}

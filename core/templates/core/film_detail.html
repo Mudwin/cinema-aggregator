@@ -67,7 +67,7 @@
           {{ film.composite_rating|floatformat:2 }} / 10
         </div>
         <p class="text-muted">
-          Средняя оценка на основе {{ film.ratings|length }} источников
+          Средняя оценка на основе {{ ratings|length }} источников
         </p>
         {% else %}
         <div class="alert alert-warning">
@@ -91,7 +91,7 @@
       </div>
       <div class="card-body">
         <div class="row">
-          {% for rating in film.ratings %}
+          {% for rating in ratings %}
           <div class="col-md-6 mb-3">
             <div class="rating-source">
               <div class="d-flex justify-content-between align-items-center">
