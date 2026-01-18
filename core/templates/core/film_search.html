@@ -1,51 +1,47 @@
 {% extends 'core/base.html' %}
+
 {% block title %}Поиск фильмов{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
-  <div class="col-12">
-    <h1 class="mb-3"><i class="bi bi-search"></i> Поиск фильмов</h1>
-    <p class="lead">
-      Найдите фильм по названию и получите рейтинги из всех источников
-    </p>
-  </div>
+    <div class="col-12">
+        <h1 class="mb-3"><i class="bi bi-search"></i> Поиск фильмов</h1>
+        <p class="lead">Найдите любой фильм и получите рейтинги из всех источников сразу</p>
+    </div>
 </div>
 
 <!-- Форма поиска -->
 <div class="card mb-4">
-  <div class="card-body">
-    <form method="get" action="{% url 'film_search' %}" class="row g-3">
-      <div class="col-md-8">
-        <label for="query" class="form-label">Название фильма</label>
-        <input
-          type="text"
-          class="form-control form-control-lg"
-          id="query"
-          name="q"
-          value="{{ query|default:'' }}"
-          placeholder="Введите название фильма..."
-          required
-        />
-      </div>
-      <div class="col-md-3">
-        <label for="year" class="form-label">Год выпуска (опционально)</label>
-        <input
-          type="number"
-          class="form-control form-control-lg"
-          id="year"
-          name="year"
-          value="{{ year|default:'' }}"
-          placeholder="Например: 1999"
-          min="1900"
-          max="{% now 'Y' %}"
-        />
-      </div>
-      <div class="col-md-1 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary btn-lg w-100">
-          <i class="bi bi-search"></i> Найти
-        </button>
-      </div>
-    </form>
-  </div>
+    <div class="card-body">
+        <form method="get" action="{% url 'film_search' %}" class="row g-3">
+            <div class="col-md-8">
+                <label for="query" class="form-label">Название фильма</label>
+                <input type="text" 
+                       class="form-control form-control-lg" 
+                       id="query" 
+                       name="q" 
+                       value="{{ query|default:'' }}" 
+                       placeholder="Введите название фильма..."
+                       required>
+            </div>
+            <div class="col-md-3">
+                <label for="year" class="form-label">Год выпуска (опционально)</label>
+                <input type="number" 
+                       class="form-control form-control-lg" 
+                       id="year" 
+                       name="year" 
+                       value="{{ year|default:'' }}" 
+                       placeholder="Например: 1999"
+                       min="1900" 
+                       max="{% now 'Y' %}">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-lg w-100">
+                    <i class="bi bi-search"></i> Найти
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <!-- Результаты поиска -->
@@ -69,13 +65,9 @@
                             </div>
                         {% endif %}
                         
-                        {% if film.db_rating %}
+                        {% if film.tmdb_rating %}
                             <div class="rating-badge">
-                                {{ film.db_rating|floatformat:1 }}
-                            </div>
-                        {% elif film.tmdb_rating %}
-                            <div class="rating-badge" style="background: rgba(13, 110, 253, 0.8);">
-                                TMDB: {{ film.tmdb_rating|floatformat:1 }}
+                                {{ film.tmdb_rating|floatformat:1 }}
                             </div>
                         {% endif %}
                         
@@ -88,15 +80,17 @@
                                 {% endif %}
                             </p>
                             
-                            {% if film.in_database %}
-                                <a href="{% url 'film_detail' film.db_film_id %}" class="btn btn-primary w-100">
-                                    <i class="bi bi-info-circle"></i> Подробнее (в базе)
-                                </a>
-                            {% else %}
-                                <a href="{% url 'film_preview' film.tmdb_id %}" class="btn btn-outline-primary w-100">
-                                    <i class="bi bi-eye"></i> Предпросмотр
-                                </a>
+                            {% if film.tmdb_rating %}
+                                <div class="mb-2">
+                                    <span class="badge bg-primary">
+                                        TMDB: {{ film.tmdb_rating|floatformat:1 }}
+                                    </span>
+                                </div>
                             {% endif %}
+                            
+                            <a href="{% url 'film_detail' film.tmdb_id %}" class="btn btn-primary w-100">
+                                <i class="bi bi-info-circle"></i> Подробнее
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -120,19 +114,27 @@
                     <p class="lead">Введите название фильма в поле выше</p>
                     
                     <div class="row mt-4">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5><i class="bi bi-1-circle text-primary"></i> Предпросмотр</h5>
-                                    <p>Нажмите "Предпросмотр" для просмотра информации из TMDB</p>
+                                    <h5><i class="bi bi-lightning text-primary"></i> Быстро</h5>
+                                    <p>Найдите любой фильм за секунды</p>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5><i class="bi bi-2-circle text-primary"></i> Импорт в базу</h5>
-                                    <p>На странице предпросмотра можно импортировать фильм для получения рейтингов из всех источников</p>
+                                    <h5><i class="bi bi-bar-chart text-primary"></i> Все рейтинги</h5>
+                                    <p>Получите рейтинги из 4+ источников сразу</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5><i class="bi bi-calculator text-primary"></i> Объективно</h5>
+                                    <p>Средний рейтинг на основе всех источников</p>
                                 </div>
                             </div>
                         </div>

@@ -1,328 +1,278 @@
+{% load humanize %}
 {% extends 'core/base.html' %}
 {% block title %}{{ film.title }} ({{ film.year }}){% endblock %}
 {% block content %}
 <!-- Хлебные крошки -->
 <nav aria-label="breadcrumb" class="mb-4">
-  <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="{% url 'home' %}">Главная</a></li>
-    <li class="breadcrumb-item">
-      <a href="{% url 'film_search' %}">Поиск фильмов</a>
-    </li>
-    <li class="breadcrumb-item active">{{ film.title }}</li>
-  </ol>
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'home' %}">Главная</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'film_search' %}">Поиск фильмов</a></li>
+        <li class="breadcrumb-item active">{{ film.title }}</li>
+    </ol>
 </nav>
 
 <div class="row">
-  <!-- Левая колонка - постер и основная информация -->
-  <div class="col-lg-4 mb-4">
-    <div class="card">
-      {% if film.poster_url %}
-      <img
-        src="{{ film.poster_url }}"
-        class="card-img-top"
-        alt="{{ film.title }}"
-      />
-      {% else %}
-      <div
-        class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
-        style="height: 400px"
-      >
-        <i class="bi bi-film" style="font-size: 4rem; color: white"></i>
-      </div>
-      {% endif %}
-
-      <div class="card-body">
-        <h2 class="card-title">{{ film.title }}</h2>
-
-        {% if film.original_title and film.original_title != film.title %}
-        <p class="text-muted">
-          Оригинальное название: {{ film.original_title }}
-        </p>
-        {% endif %}
-
-        <p class="card-text">
-          <i class="bi bi-calendar"></i> <strong>Год:</strong> {{ film.year }}<br />
-          <i class="bi bi-info-circle"></i> <strong>TMDB ID:</strong> {{ film.tmdb_id }}<br />
-          <i class="bi bi-imdb"></i> <strong>IMDb ID:</strong> {{ film.imdb_id|default:"Не указан" }}
-        </p>
-
-        {% if film.description %}
-        <div class="mt-3">
-          <h5>Описание:</h5>
-          <p class="card-text">{{ film.description }}</p>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <!-- Правая колонка - рейтинги и детали -->
-  <div class="col-lg-8">
-    <!-- Композитный рейтинг -->
-    <div class="card mb-4">
-      <div class="card-body text-center">
-        <h3 class="card-title mb-3">Общий рейтинг</h3>
-        {% if film.composite_rating %}
-        <div class="composite-rating mb-3">
-          {{ film.composite_rating|floatformat:2 }} / 10
-        </div>
-        <p class="text-muted">
-          Средняя оценка на основе {{ ratings|length }} источников
-        </p>
-        {% else %}
-        <div class="alert alert-warning">
-          <i class="bi bi-exclamation-triangle"></i>
-          Рейтинги еще не загружены
-        </div>
-        <form method="post" action="{% url 'update_film_ratings' film.id %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-download"></i> Загрузить рейтинги
-          </button>
-        </form>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Рейтинги из разных источников -->
-    <div class="card mb-4">
-      <div class="card-header">
-        <h3 class="card-title mb-0">Рейтинги из разных источников</h3>
-      </div>
-      <div class="card-body">
-        <div class="row">
-          {% for rating in ratings %}
-          <div class="col-md-6 mb-3">
-            <div class="rating-source">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  <h5 class="mb-1">
-                    {% if rating.source == 'imdb' %}
-                    <i class="bi bi-imdb text-warning"></i> IMDb
-                    {% elif rating.source == 'rotten_tomatoes' %}
-                    <i class="bi bi-tomato text-success"></i> Rotten Tomatoes
-                    {% elif rating.source == 'metacritic' %}
-                    <i class="bi bi-meta text-info"></i> Metacritic
-                    {% elif rating.source == 'kinopoisk' %}
-                    <i class="bi bi-film text-danger"></i> Кинопоиск
-                    {% else %}
-                    {{ rating.get_source_display }}
-                    {% endif %}
-                  </h5>
-                  <small class="text-muted">
-                    {{ rating.votes_count|default:"-" }} голосов
-                  </small>
+    <!-- Левая колонка -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            {% if film.poster_url %}
+                <img src="{{ film.poster_url }}" class="card-img-top" alt="{{ film.title }}" style="height: 400px; object-fit: cover;">
+            {% else %}
+                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center" style="height: 400px;">
+                    <i class="bi bi-film" style="font-size: 4rem; color: white;"></i>
                 </div>
-                <div class="text-end">
-                  <div class="rating-value">
-                    {{ rating.value|floatformat:1 }}
-                  </div>
-                  <small class="text-muted">
-                    из {{ rating.max_value|floatformat:0 }}
-                  </small>
-                </div>
-              </div>
-
-              <!-- Прогресс-бар для визуализации -->
-              <div class="progress mt-2" style="height: 8px">
-                {% widthratio rating.value rating.max_value 100 as percentage %}
-                <div
-                  class="progress-bar {% if rating.source == 'imdb' %}bg-warning {% elif rating.source == 'rotten_tomatoes' %}bg-success {% elif rating.source == 'metacritic' %}bg-info {% elif rating.source == 'kinopoisk' %}bg-danger {% else %}bg-primary{% endif %}"
-                  role="progressbar"
-                  style="width: {{ percentage }}%"
-                  aria-valuenow="{{ rating.value }}"
-                  aria-valuemin="0"
-                  aria-valuemax="{{ rating.max_value }}"
-                ></div>
-              </div>
-
-              <!-- Нормализованный рейтинг (к 10-балльной шкале) -->
-              {% if rating.normalized_value %}
-              <div class="text-end mt-1">
-                <small class="text-muted">
-                  ≈ {{ rating.normalized_value|floatformat:2 }}/10
-                </small>
-              </div>
-              {% endif %}
-            </div>
-          </div>
-          {% empty %}
-          <div class="col-12">
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle"></i>
-              Рейтинги еще не загружены для этого фильма.
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-
-        <!-- Обновление рейтингов -->
-        <div class="mt-3">
-          <form method="post" action="{% url 'update_film_ratings' film.id %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-primary">
-              <i class="bi bi-arrow-clockwise"></i> Обновить рейтинги
-            </button>
-            <small class="text-muted ms-2"
-              >Последнее обновление: {{ film.updated_at|date:"d.m.Y H:i" }}</small
-            >
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <!-- Режиссеры и актеры -->
-    <div class="row">
-      <!-- Режиссеры -->
-      {% if directors %}
-      <div class="col-md-6 mb-4">
-        <div class="card h-100">
-          <div class="card-header">
-            <h4 class="card-title mb-0">
-              <i class="bi bi-camera-reels"></i> Режиссеры
-            </h4>
-          </div>
-          <div class="card-body">
-            <div class="list-group">
-              {% for director in directors %}
-              <div class="list-group-item border-0 px-0">
-                <div class="d-flex align-items-center">
-                  {% if director.photo_url %}
-                  <img
-                    src="{{ director.photo_url }}"
-                    class="rounded-circle me-3"
-                    alt="{{ director.name }}"
-                    style="width: 50px; height: 50px; object-fit: cover"
-                  />
-                  {% else %}
-                  <div
-                    class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3"
-                    style="width: 50px; height: 50px"
-                  >
-                    <i class="bi bi-person" style="color: white"></i>
-                  </div>
-                  {% endif %}
-                  <div>
-                    <h6 class="mb-0">{{ director.name }}</h6>
-                    <small class="text-muted">{{ director.role }}</small>
-                  </div>
-                </div>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- Актеры -->
-      {% if actors %}
-      <div class="col-md-6 mb-4">
-        <div class="card h-100">
-          <div class="card-header">
-            <h4 class="card-title mb-0">
-              <i class="bi bi-person-badge"></i> В главных ролях
-            </h4>
-          </div>
-          <div class="card-body">
-            <div class="list-group">
-              {% for actor in actors|slice:":5" %}
-              <div class="list-group-item border-0 px-0">
-                <div class="d-flex align-items-center">
-                  {% if actor.photo_url %}
-                  <img
-                    src="{{ actor.photo_url }}"
-                    class="rounded-circle me-3"
-                    alt="{{ actor.name }}"
-                    style="width: 50px; height: 50px; object-fit: cover"
-                  />
-                  {% else %}
-                  <div
-                    class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3"
-                    style="width: 50px; height: 50px"
-                  >
-                    <i class="bi bi-person" style="color: white"></i>
-                  </div>
-                  {% endif %}
-                  <div>
-                    <h6 class="mb-0">{{ actor.name }}</h6>
-                    <small class="text-muted">
-                      {% if actor.character_name %} {{ actor.character_name }}
-                      {% else %} {{ actor.role }} {% endif %}
-                    </small>
-                  </div>
-                </div>
-              </div>
-              {% endfor %}
-              {% if actors|length > 5 %}
-              <div class="mt-3">
-                <a href="#" class="btn btn-sm btn-outline-secondary w-100">
-                  Показать всех актеров ({{ actors|length }})
-                </a>
-              </div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-    </div>
-  </div>
-</div>
-
-<!-- Похожие фильмы -->
-{% if similar_films %}
-<div class="row mt-5">
-  <div class="col-12">
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title mb-0">Похожие фильмы</h3>
-      </div>
-      <div class="card-body">
-        <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-3">
-          {% for similar in similar_films %}
-          <div class="col">
-            <a
-              href="{% url 'film_detail' similar.id %}"
-              class="text-decoration-none"
-            >
-              <div class="card h-100 border-0">
-                {% if similar.poster_url %}
-                <img
-                  src="{{ similar.poster_url }}"
-                  class="card-img-top rounded"
-                  alt="{{ similar.title }}"
-                  style="height: 150px; object-fit: cover"
-                />
-                {% else %}
-                <div
-                  class="card-img-top bg-secondary rounded d-flex align-items-center justify-content-center"
-                  style="height: 150px"
-                >
-                  <i class="bi bi-film" style="color: white"></i>
-                </div>
+            {% endif %}
+            
+            <div class="card-body">
+                <h2 class="card-title">{{ film.title }}</h2>
+                
+                {% if film.original_title and film.original_title != film.title %}
+                    <p class="text-muted">Оригинальное название: {{ film.original_title }}</p>
                 {% endif %}
-                <div class="card-body p-2">
-                  <h6 class="card-title mb-1 text-dark">
-                    {{ similar.title|truncatechars:20 }}
-                  </h6>
-                  <small class="text-muted">{{ similar.year }}</small>
-                  {% if similar.composite_rating %}
-                  <div class="mt-1">
-                    <span class="badge bg-primary">
-                      {{ similar.composite_rating|floatformat:1 }}
-                    </span>
-                  </div>
-                  {% endif %}
+                
+                <p class="card-text">
+                    <i class="bi bi-calendar"></i> <strong>Год:</strong> {{ film.year }}<br>
+                    {% if film.runtime %}
+                        <i class="bi bi-clock"></i> <strong>Длительность:</strong> {{ film.runtime }} мин<br>
+                    {% endif %}
+                    {% if film.genres %}
+                        <i class="bi bi-tags"></i> <strong>Жанры:</strong> {{ film.genres|join:", " }}<br>
+                    {% endif %}
+                    {% if film.countries %}
+                        <i class="bi bi-globe"></i> <strong>Страны:</strong> {{ film.countries|join:", " }}
+                    {% endif %}
+                </p>
+                
+                {% if film.description %}
+                    <div class="mt-3">
+                        <h5>Описание:</h5>
+                        <p class="card-text">{{ film.description }}</p>
+                    </div>
+                {% endif %}
+                
+                <!-- Кнопка обновления данных -->
+                <div class="mt-4">
+                    <a href="{% url 'force_refresh' film.tmdb_id %}" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить данные
+                    </a>
                 </div>
-              </div>
-            </a>
-          </div>
-          {% endfor %}
+            </div>
         </div>
-      </div>
     </div>
-  </div>
+
+    <!-- Правая колонка -->
+    <div class="col-lg-8">
+        <!-- Средний рейтинг -->
+        {% if film.average_rating and film.ratings_count > 0 %}
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <h3 class="card-title mb-3">Объективный рейтинг</h3>
+                    <div class="composite-rating mb-3">
+                        {{ film.average_rating|floatformat:2 }} / 10
+                    </div>
+                    <p class="text-muted">
+                        Средняя оценка на основе {{ film.ratings_count }} источников
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Рейтинги из разных источников -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Рейтинги из разных источников</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for rating in ratings %}
+                        <div class="col-md-6 mb-3">
+                            <div class="rating-source">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-1">
+                                            {% if rating.source == 'IMDb' %}
+                                                <i class="bi bi-imdb text-warning"></i> IMDb
+                                            {% elif rating.source == 'Rotten Tomatoes' %}
+                                                <i class="bi bi-tomato text-success"></i> Rotten Tomatoes
+                                            {% elif rating.source == 'Metacritic' %}
+                                                <i class="bi bi-meta text-info"></i> Metacritic
+                                            {% elif rating.source == 'Кинопоиск' %}
+                                                <i class="bi bi-film text-danger"></i> Кинопоиск
+                                            {% elif rating.source == 'TMDB' %}
+                                                <i class="bi bi-star-fill text-primary"></i> TMDB
+                                            {% else %}
+                                                {{ rating.source }}
+                                            {% endif %}
+                                        </h5>
+                                        {% if rating.votes_count %}
+                                            <small class="text-muted">
+                                                {{ rating.votes_count|intcomma }} голосов
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="rating-value">
+                                            {{ rating.value|floatformat:1 }}
+                                        </div>
+                                        <small class="text-muted">
+                                            из {{ rating.max_value|floatformat:0 }}
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Прогресс-бар для визуализации -->
+                                <div class="progress mt-2" style="height: 8px;">
+                                    {% widthratio rating.value rating.max_value 100 as percentage %}
+                                    <div class="progress-bar 
+                                        {% if rating.source == 'IMDb' %}bg-warning
+                                        {% elif rating.source == 'Rotten Tomatoes' %}bg-success
+                                        {% elif rating.source == 'Metacritic' %}bg-info
+                                        {% elif rating.source == 'Кинопоиск' %}bg-danger
+                                        {% elif rating.source == 'TMDB' %}bg-primary
+                                        {% else %}bg-secondary{% endif %}" 
+                                        role="progressbar" 
+                                        style="width: {{ percentage }}%"
+                                        aria-valuenow="{{ rating.value }}" 
+                                        aria-valuemin="0" 
+                                        aria-valuemax="{{ rating.max_value }}">
+                                    </div>
+                                </div>
+                                
+                                <!-- Нормализованный рейтинг -->
+                                {% if rating.normalized_value %}
+                                    <div class="text-end mt-1">
+                                        <small class="text-muted">
+                                            ≈ {{ rating.normalized_value|floatformat:2 }}/10
+                                        </small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="col-12">
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                Рейтинги временно недоступны. Попробуйте обновить страницу.
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Обновление данных -->
+                <div class="mt-3">
+                    <a href="{% url 'force_refresh' film.tmdb_id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить все рейтинги
+                    </a>
+                    <small class="text-muted ms-2">Данные кэшируются на 1 час</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Режиссеры и актеры -->
+        <div class="row">
+            <!-- Режиссеры -->
+            {% if directors %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h4 class="card-title mb-0"><i class="bi bi-camera-reels"></i> Режиссеры</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                                {% for director in directors %}
+                                    <div class="list-group-item border-0 px-0">
+                                        <div class="d-flex align-items-center">
+                                            {% if director.photo_url %}
+                                                <img src="{{ director.photo_url }}" 
+                                                     class="rounded-circle me-3" 
+                                                     alt="{{ director.name }}" 
+                                                     style="width: 50px; height: 50px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3" 
+                                                     style="width: 50px; height: 50px;">
+                                                    <i class="bi bi-person" style="color: white;"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <h6 class="mb-0">{{ director.name }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Актеры -->
+            {% if actors %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h4 class="card-title mb-0"><i class="bi bi-person-badge"></i> В главных ролях</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                                {% for actor in actors %}
+                                    <div class="list-group-item border-0 px-0">
+                                        <div class="d-flex align-items-center">
+                                            {% if actor.photo_url %}
+                                                <img src="{{ actor.photo_url }}" 
+                                                     class="rounded-circle me-3" 
+                                                     alt="{{ actor.name }}" 
+                                                     style="width: 50px; height: 50px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3" 
+                                                     style="width: 50px; height: 50px;">
+                                                    <i class="bi bi-person" style="color: white;"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <h6 class="mb-0">{{ actor.name }}</h6>
+                                                <small class="text-muted">
+                                                    {{ actor.character }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
-{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const refreshLinks = document.querySelectorAll('a[href*="force_refresh"]');
+    refreshLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Обновление...';
+            this.disabled = true;
+            
+            fetch(this.href)
+                .then(response => {
+                    if (response.ok) {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    }
+                })
+                .catch(error => {
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                    alert('Ошибка при обновлении данных');
+                });
+        });
+    });
+});
+</script>
 {% endblock %}
