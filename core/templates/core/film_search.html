@@ -56,7 +56,6 @@
         </div>
     </div>
 
-    <!-- Локальные результаты -->
     {% if films %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
             {% for film in films %}
@@ -70,9 +69,13 @@
                             </div>
                         {% endif %}
                         
-                        {% if film.composite_rating %}
+                        {% if film.db_rating %}
                             <div class="rating-badge">
-                                {{ film.composite_rating|floatformat:1 }}
+                                {{ film.db_rating|floatformat:1 }}
+                            </div>
+                        {% elif film.tmdb_rating %}
+                            <div class="rating-badge" style="background: rgba(13, 110, 253, 0.8);">
+                                TMDB: {{ film.tmdb_rating|floatformat:1 }}
                             </div>
                         {% endif %}
                         
@@ -85,115 +88,27 @@
                                 {% endif %}
                             </p>
                             
-                            <a href="{% url 'film_detail' film.id %}" class="btn btn-primary w-100">
-                                <i class="bi bi-info-circle"></i> Подробнее
-                            </a>
+                            {% if film.in_database %}
+                                <a href="{% url 'film_detail' film.db_film_id %}" class="btn btn-primary w-100">
+                                    <i class="bi bi-info-circle"></i> Подробнее (в базе)
+                                </a>
+                            {% else %}
+                                <a href="{% url 'film_preview' film.tmdb_id %}" class="btn btn-outline-primary w-100">
+                                    <i class="bi bi-eye"></i> Предпросмотр
+                                </a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             {% endfor %}
         </div>
         
-        <!-- Пагинация -->
-        {% if films.has_other_pages %}
-            <nav aria-label="Page navigation" class="mt-4">
-                <ul class="pagination justify-content-center">
-                    {% if films.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?q={{ query }}&year={{ year }}&page={{ films.previous_page_number }}">Назад</a>
-                        </li>
-                    {% endif %}
-                    
-                    {% for num in films.paginator.page_range %}
-                        {% if films.number == num %}
-                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                        {% else %}
-                            <li class="page-item"><a class="page-link" href="?q={{ query }}&year={{ year }}&page={{ num }}">{{ num }}</a></li>
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if films.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?q={{ query }}&year={{ year }}&page={{ films.next_page_number }}">Вперед</a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        {% endif %}
-        
-    {% elif external_films %}
-    <!-- Внешние результаты -->
-    <div class="alert alert-info">
-        <i class="bi bi-info-circle"></i>
-        Фильмы из внешних источников. Нажмите "Импортировать", чтобы добавить в нашу базу и получить рейтинги.
-    </div>
-    
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
-        {% for film in external_films %}
-            <div class="col">
-                <div class="card film-card">
-                    {% if film.poster_url %}
-                        <img src="{{ film.poster_url }}" class="card-img-top film-poster" alt="{{ film.title }}">
-                    {% else %}
-                        <div class="film-poster bg-secondary d-flex align-items-center justify-content-center">
-                            <i class="bi bi-film" style="font-size: 3rem; color: white;"></i>
-                        </div>
-                    {% endif %}
-                    
-                    <div class="card-body">
-                        <h5 class="card-title">{{ film.title }}</h5>
-                        <p class="card-text text-muted">
-                            {{ film.year }}
-                            {% if film.original_title and film.original_title != film.title %}
-                                <br><small>({{ film.original_title }})</small>
-                            {% endif %}
-                        </p>
-                        
-                        {% if film.tmdb_rating %}
-                            <div class="mb-2">
-                                <span class="badge bg-warning">
-                                    TMDB: {{ film.tmdb_rating|floatformat:1 }}
-                                </span>
-                            </div>
-                        {% endif %}
-                        
-                        <form method="post" action="{% url 'film_import' %}" class="mt-2" onsubmit="return confirmImport(this)">
-                            {% csrf_token %}
-                            <input type="hidden" name="tmdb_id" value="{{ film.tmdb_id }}">
-                            <input type="hidden" name="query" value="{{ query }}">
-                            <input type="hidden" name="year" value="{{ year }}">
-                            <button type="submit" class="btn btn-outline-success w-100">
-                                <i class="bi bi-download"></i> Импортировать
-                            </button>
-                        </form>
-
-                        <script>
-                            function confirmImport(form) {
-                                const filmTitle = form.closest('.card').querySelector('.card-title').textContent;
-                                const confirmed = confirm(`Вы уверены, что хотите импортировать фильм "${filmTitle.trim()}"?`);
-                                if (confirmed) {
-                                    // Показываем индикатор загрузки
-                                    const button = form.querySelector('button');
-                                    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Импортируется...';
-                                    button.disabled = true;
-                                    return true;
-                                }
-                                return false;
-                            }
-                        </script>
-                    </div>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
-        
-    {% elif search_performed %}
+    {% else %}
         <div class="alert alert-warning">
             <i class="bi bi-exclamation-triangle"></i>
             Фильмы не найдены.
         </div>
     {% endif %}
-    
 {% else %}
     <!-- Инструкция при первом заходе -->
     <div class="row mt-5">
@@ -208,16 +123,16 @@
                         <div class="col-md-6 mb-3">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5><i class="bi bi-1-circle text-primary"></i> Поиск в нашей базе</h5>
-                                    <p>Сначала мы ищем фильмы, которые уже есть в нашей базе данных</p>
+                                    <h5><i class="bi bi-1-circle text-primary"></i> Предпросмотр</h5>
+                                    <p>Нажмите "Предпросмотр" для просмотра информации из TMDB</p>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6 mb-3">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5><i class="bi bi-2-circle text-primary"></i> Поиск во внешних источниках</h5>
-                                    <p>Если не нашли - ищем в TMDB и предлагаем импортировать</p>
+                                    <h5><i class="bi bi-2-circle text-primary"></i> Импорт в базу</h5>
+                                    <p>На странице предпросмотра можно импортировать фильм для получения рейтингов из всех источников</p>
                                 </div>
                             </div>
                         </div>

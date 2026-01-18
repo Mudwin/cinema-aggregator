@@ -1,0 +1,224 @@
+{% extends 'core/base.html' %}
+
+{% block title %}{{ film.title }} ({{ film.year }}) - Предпросмотр{% endblock %}
+
+{% block content %}
+<!-- Хлебные крошки -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'home' %}">Главная</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'film_search' %}">Поиск фильмов</a></li>
+        <li class="breadcrumb-item active">{{ film.title }} (предпросмотр)</li>
+    </ol>
+</nav>
+
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    Это предпросмотр фильма из внешних источников. Для сохранения в базу данных и получения рейтингов из всех источников, нажмите "Импортировать".
+</div>
+
+<div class="row">
+    <!-- Левая колонка -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            {% if film.poster_url %}
+                <img src="{{ film.poster_url }}" class="card-img-top" alt="{{ film.title }}" style="height: 400px; object-fit: cover;">
+            {% else %}
+                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center" style="height: 400px;">
+                    <i class="bi bi-film" style="font-size: 4rem; color: white;"></i>
+                </div>
+            {% endif %}
+            
+            <div class="card-body">
+                <h2 class="card-title">{{ film.title }}</h2>
+                
+                {% if film.original_title and film.original_title != film.title %}
+                    <p class="text-muted">Оригинальное название: {{ film.original_title }}</p>
+                {% endif %}
+                
+                <p class="card-text">
+                    <i class="bi bi-calendar"></i> <strong>Год:</strong> {{ film.year }}<br>
+                    <i class="bi bi-clock"></i> <strong>Длительность:</strong> {{ film.runtime }} мин<br>
+                    <i class="bi bi-tags"></i> <strong>Жанры:</strong> {{ film.genres|join:", " }}<br>
+                    <i class="bi bi-globe"></i> <strong>Страны:</strong> {{ film.countries|join:", " }}
+                </p>
+                
+                {% if film.description %}
+                    <div class="mt-3">
+                        <h5>Описание:</h5>
+                        <p class="card-text">{{ film.description }}</p>
+                    </div>
+                {% endif %}
+                
+                <!-- Кнопка импорта -->
+                <form method="post" action="{% url 'film_import' %}" class="mt-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="tmdb_id" value="{{ film.tmdb_id }}">
+                    <button type="submit" class="btn btn-success btn-lg w-100">
+                        <i class="bi bi-download"></i> Импортировать в базу
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Правая колонка -->
+    <div class="col-lg-8">
+        <!-- Рейтинги -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Рейтинги из разных источников</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- TMDB рейтинг -->
+                    {% if film.tmdb_rating %}
+                        <div class="col-md-6 mb-3">
+                            <div class="rating-source">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-1">
+                                            <i class="bi bi-star-fill text-warning"></i> TMDB
+                                        </h5>
+                                        <small class="text-muted">
+                                            {{ film.tmdb_votes }} голосов
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="rating-value">
+                                            {{ film.tmdb_rating|floatformat:1 }}
+                                        </div>
+                                        <small class="text-muted">
+                                            из 10
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    {% for source_name, rating_data in ratings.items %}
+                        <div class="col-md-6 mb-3">
+                            <div class="rating-source">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-1">
+                                            {% if source_name == 'imdb' %}
+                                                <i class="bi bi-imdb text-warning"></i> IMDb
+                                            {% elif source_name == 'rotten_tomatoes' %}
+                                                <i class="bi bi-tomato text-success"></i> Rotten Tomatoes
+                                            {% elif source_name == 'metacritic' %}
+                                                <i class="bi bi-meta text-info"></i> Metacritic
+                                            {% elif source_name == 'kinopoisk' %}
+                                                <i class="bi bi-film text-danger"></i> Кинопоиск
+                                            {% else %}
+                                                {{ source_name|title }}
+                                            {% endif %}
+                                        </h5>
+                                        {% if rating_data.votes %}
+                                            <small class="text-muted">
+                                                {{ rating_data.votes }} голосов
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="rating-value">
+                                            {{ rating_data.value|floatformat:1 }}
+                                        </div>
+                                        <small class="text-muted">
+                                            из {{ rating_data.max_value|floatformat:0 }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="col-12">
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                Рейтинги из других источников будут доступны после импорта.
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Режиссеры и актеры -->
+        <div class="row">
+            <!-- Режиссеры -->
+            {% if directors %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h4 class="card-title mb-0"><i class="bi bi-camera-reels"></i> Режиссеры</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                                {% for director in directors %}
+                                    <div class="list-group-item border-0 px-0">
+                                        <div class="d-flex align-items-center">
+                                            {% if director.photo_url %}
+                                                <img src="{{ director.photo_url }}" 
+                                                     class="rounded-circle me-3" 
+                                                     alt="{{ director.name }}" 
+                                                     style="width: 50px; height: 50px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3" 
+                                                     style="width: 50px; height: 50px;">
+                                                    <i class="bi bi-person" style="color: white;"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <h6 class="mb-0">{{ director.name }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Актеры -->
+            {% if actors %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h4 class="card-title mb-0"><i class="bi bi-person-badge"></i> В главных ролях</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group">
+                                {% for actor in actors %}
+                                    <div class="list-group-item border-0 px-0">
+                                        <div class="d-flex align-items-center">
+                                            {% if actor.photo_url %}
+                                                <img src="{{ actor.photo_url }}" 
+                                                     class="rounded-circle me-3" 
+                                                     alt="{{ actor.name }}" 
+                                                     style="width: 50px; height: 50px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3" 
+                                                     style="width: 50px; height: 50px;">
+                                                    <i class="bi bi-person" style="color: white;"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div>
+                                                <h6 class="mb-0">{{ actor.name }}</h6>
+                                                <small class="text-muted">
+                                                    {{ actor.character }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
