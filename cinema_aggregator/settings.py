@@ -148,7 +148,6 @@ CELERY_ENABLE_UTC = True
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_BEAT_SCHEDULE = {
-    # Задачи будут добавлены через админку
 }
 
 OMDB_API_KEY = os.getenv('OMDB_API_KEY', '')

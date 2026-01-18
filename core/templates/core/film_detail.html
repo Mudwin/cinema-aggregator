@@ -1,4 +1,3 @@
-{% load humanize %}
 {% extends 'core/base.html' %}
 {% block title %}{{ film.title }} ({{ film.year }}){% endblock %}
 {% block content %}
@@ -63,7 +62,7 @@
     <!-- Правая колонка - рейтинги и детали -->
     <div class="col-lg-8">
         <!-- Средний рейтинг -->
-        {% if film.average_rating and film.ratings_count > 0 %}
+        {% if film.average_rating %}
             <div class="card mb-4">
                 <div class="card-body text-center">
                     <h3 class="card-title mb-3">Объективный рейтинг</h3>
@@ -84,46 +83,6 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <!-- TMDB рейтинг (если есть) -->
-                    {% if film.tmdb_rating %}
-                        <div class="col-md-6 mb-3">
-                            <div class="rating-source">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-1">
-                                            <i class="bi bi-star-fill text-primary"></i> TMDB
-                                        </h5>
-                                        {% if film.tmdb_votes %}
-                                            <small class="text-muted">
-                                                {{ film.tmdb_votes }} голосов
-                                            </small>
-                                        {% endif %}
-                                    </div>
-                                    <div class="text-end">
-                                        <div class="rating-value">
-                                            {{ film.tmdb_rating|floatformat:1 }}
-                                        </div>
-                                        <small class="text-muted">
-                                            из 10
-                                        </small>
-                                    </div>
-                                </div>
-                                
-                                <!-- Прогресс-бар -->
-                                <div class="progress mt-2" style="height: 8px;">
-                                    {% widthratio film.tmdb_rating 10 100 as percentage %}
-                                    <div class="progress-bar bg-primary" 
-                                         role="progressbar" 
-                                         style="width: {{ percentage }}%"
-                                         aria-valuenow="{{ film.tmdb_rating }}" 
-                                         aria-valuemin="0" 
-                                         aria-valuemax="10">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {% endif %}
-                    
                     <!-- Остальные рейтинги -->
                     {% for rating in ratings %}
                         <div class="col-md-6 mb-3">

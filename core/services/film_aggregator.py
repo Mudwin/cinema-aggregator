@@ -1,3 +1,4 @@
+# cinema-aggregator/core/services/film_aggregator.py
 import logging
 import re
 from typing import Dict, List, Optional
@@ -22,17 +23,20 @@ class FilmAggregator:
     
     def _clean_cache_key(self, key: str) -> str:
         """Очистка ключа кэша от недопустимых символов."""
-        return re.sub(r'[^a-zA-Z0-9]', '_', key)
+        return key
     
     def get_film_data(self, tmdb_id: int) -> Optional[Dict]:
         """
         Получение всех данных о фильме в реальном времени.
         """
         try:
-            cache_key = self._clean_cache_key(f'film_full_data_{tmdb_id}')
+            cache_key = f'film_full_data_{tmdb_id}'
             cached_data = cache.get(cache_key)
             if cached_data:
-                return cached_data
+                if cached_data.get('tmdb_id') == tmdb_id:
+                    return cached_data
+                else:
+                    cache.delete(cache_key)
             
             tmdb_data = self.tmdb_service.get_movie_details(
                 tmdb_id,
@@ -42,6 +46,10 @@ class FilmAggregator:
             
             if not tmdb_data or 'id' not in tmdb_data:
                 logger.error(f"No data from TMDB for ID {tmdb_id}")
+                return None
+            
+            if tmdb_data.get('id') != tmdb_id:
+                logger.error(f"TMDB returned wrong movie! Requested: {tmdb_id}, Got: {tmdb_data.get('id')}")
                 return None
             
             if not tmdb_data.get('title'):
@@ -69,19 +77,23 @@ class FilmAggregator:
                 'tmdb_votes': tmdb_data.get('vote_count'),
             }
             
-            film_data['ratings'] = self._get_all_ratings(film_data['imdb_id'], film_data['title'], film_data['year'])
+            ratings = self._get_all_ratings(film_data['imdb_id'], film_data['title'], film_data['year'])
+            film_data['ratings'] = ratings
             
-            ratings = film_data['ratings']
-            if ratings:
-                normalized_ratings = []
-                for rating in ratings.values():
-                    if 'normalized_value' in rating:
-                        normalized_ratings.append(rating['normalized_value'])
-                
-                if normalized_ratings:
-                    avg_rating = sum(normalized_ratings) / len(normalized_ratings)
-                    film_data['average_rating'] = round(avg_rating, 2)
-                    film_data['ratings_count'] = len(ratings)
+            normalized_ratings = []
+            for source, rating in ratings.items():
+                if 'value' in rating and 'max_value' in rating and rating['max_value'] > 0:
+                    normalized_value = (rating['value'] / rating['max_value']) * 10
+                    ratings[source]['normalized_value'] = normalized_value
+                    normalized_ratings.append(normalized_value)
+            
+            if normalized_ratings:
+                avg_rating = sum(normalized_ratings) / len(normalized_ratings)
+                film_data['average_rating'] = round(avg_rating, 2)
+                film_data['ratings_count'] = len(ratings)
+            else:
+                film_data['average_rating'] = None
+                film_data['ratings_count'] = 0
             
             credits = tmdb_data.get('credits', {})
             
@@ -131,8 +143,7 @@ class FilmAggregator:
                 kinopoisk_movie = self.kinopoisk_service.get_movie_by_imdb_id(imdb_id)
                 if kinopoisk_movie:
                     kp_ratings = self.kinopoisk_service.get_movie_rating(kinopoisk_movie)
-                    if 'kinopoisk' in kp_ratings:
-                        ratings['kinopoisk'] = kp_ratings['kinopoisk']
+                    ratings.update(kp_ratings)
             except Exception as e:
                 logger.error(f"Error getting Kinopoisk ratings by IMDb ID {imdb_id}: {str(e)}")
         
@@ -154,7 +165,7 @@ class FilmAggregator:
         Поиск фильмов в TMDB.
         """
         try:
-            cache_key = self._clean_cache_key(f'film_search_{query}_{year}')
+            cache_key = f'film_search_{query}_{year}'
             cached_results = cache.get(cache_key)
             if cached_results:
                 return cached_results
