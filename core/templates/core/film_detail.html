@@ -60,7 +60,7 @@
         </div>
     </div>
 
-    <!-- Правая колонка -->
+    <!-- Правая колонка - рейтинги и детали -->
     <div class="col-lg-8">
         <!-- Средний рейтинг -->
         {% if film.average_rating and film.ratings_count > 0 %}
@@ -84,6 +84,47 @@
             </div>
             <div class="card-body">
                 <div class="row">
+                    <!-- TMDB рейтинг (если есть) -->
+                    {% if film.tmdb_rating %}
+                        <div class="col-md-6 mb-3">
+                            <div class="rating-source">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-1">
+                                            <i class="bi bi-star-fill text-primary"></i> TMDB
+                                        </h5>
+                                        {% if film.tmdb_votes %}
+                                            <small class="text-muted">
+                                                {{ film.tmdb_votes }} голосов
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="rating-value">
+                                            {{ film.tmdb_rating|floatformat:1 }}
+                                        </div>
+                                        <small class="text-muted">
+                                            из 10
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Прогресс-бар -->
+                                <div class="progress mt-2" style="height: 8px;">
+                                    {% widthratio film.tmdb_rating 10 100 as percentage %}
+                                    <div class="progress-bar bg-primary" 
+                                         role="progressbar" 
+                                         style="width: {{ percentage }}%"
+                                         aria-valuenow="{{ film.tmdb_rating }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="10">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Остальные рейтинги -->
                     {% for rating in ratings %}
                         <div class="col-md-6 mb-3">
                             <div class="rating-source">
@@ -92,21 +133,19 @@
                                         <h5 class="mb-1">
                                             {% if rating.source == 'IMDb' %}
                                                 <i class="bi bi-imdb text-warning"></i> IMDb
+                                            {% elif rating.source == 'Кинопоиск' %}
+                                                <i class="bi bi-film text-danger"></i> Кинопоиск
                                             {% elif rating.source == 'Rotten Tomatoes' %}
                                                 <i class="bi bi-tomato text-success"></i> Rotten Tomatoes
                                             {% elif rating.source == 'Metacritic' %}
                                                 <i class="bi bi-meta text-info"></i> Metacritic
-                                            {% elif rating.source == 'Кинопоиск' %}
-                                                <i class="bi bi-film text-danger"></i> Кинопоиск
-                                            {% elif rating.source == 'TMDB' %}
-                                                <i class="bi bi-star-fill text-primary"></i> TMDB
                                             {% else %}
                                                 {{ rating.source }}
                                             {% endif %}
                                         </h5>
                                         {% if rating.votes_count %}
                                             <small class="text-muted">
-                                                {{ rating.votes_count|intcomma }} голосов
+                                                {{ rating.votes_count }} голосов
                                             </small>
                                         {% endif %}
                                     </div>
@@ -120,15 +159,14 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Прогресс-бар для визуализации -->
+                                <!-- Прогресс-бар -->
                                 <div class="progress mt-2" style="height: 8px;">
                                     {% widthratio rating.value rating.max_value 100 as percentage %}
                                     <div class="progress-bar 
                                         {% if rating.source == 'IMDb' %}bg-warning
+                                        {% elif rating.source == 'Кинопоиск' %}bg-danger
                                         {% elif rating.source == 'Rotten Tomatoes' %}bg-success
                                         {% elif rating.source == 'Metacritic' %}bg-info
-                                        {% elif rating.source == 'Кинопоиск' %}bg-danger
-                                        {% elif rating.source == 'TMDB' %}bg-primary
                                         {% else %}bg-secondary{% endif %}" 
                                         role="progressbar" 
                                         style="width: {{ percentage }}%"
@@ -137,24 +175,17 @@
                                         aria-valuemax="{{ rating.max_value }}">
                                     </div>
                                 </div>
-                                
-                                <!-- Нормализованный рейтинг -->
-                                {% if rating.normalized_value %}
-                                    <div class="text-end mt-1">
-                                        <small class="text-muted">
-                                            ≈ {{ rating.normalized_value|floatformat:2 }}/10
-                                        </small>
-                                    </div>
-                                {% endif %}
                             </div>
                         </div>
                     {% empty %}
-                        <div class="col-12">
-                            <div class="alert alert-warning">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                Рейтинги временно недоступны. Попробуйте обновить страницу.
+                        {% if not film.tmdb_rating %}
+                            <div class="col-12">
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Рейтинги временно недоступны. Попробуйте обновить страницу.
+                                </div>
                             </div>
-                        </div>
+                        {% endif %}
                     {% endfor %}
                 </div>
                 

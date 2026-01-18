@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Dict, List, Optional
 from django.core.cache import cache
 
@@ -12,7 +13,6 @@ logger = logging.getLogger(__name__)
 class FilmAggregator:
     """
     Сервис для агрегации всех данных о фильме из разных источников в реальном времени.
-    Работает без сохранения в базу данных.
     """
     
     def __init__(self):
@@ -20,18 +20,16 @@ class FilmAggregator:
         self.omdb_service = OMDbService()
         self.kinopoisk_service = KinopoiskService()
     
+    def _clean_cache_key(self, key: str) -> str:
+        """Очистка ключа кэша от недопустимых символов."""
+        return re.sub(r'[^a-zA-Z0-9]', '_', key)
+    
     def get_film_data(self, tmdb_id: int) -> Optional[Dict]:
         """
         Получение всех данных о фильме в реальном времени.
-        
-        Args:
-            tmdb_id (int): ID фильма в TMDB
-            
-        Returns:
-            Dict: Все данные о фильме или None если ошибка
         """
         try:
-            cache_key = f'film_full_data_{tmdb_id}'
+            cache_key = self._clean_cache_key(f'film_full_data_{tmdb_id}')
             cached_data = cache.get(cache_key)
             if cached_data:
                 return cached_data
@@ -39,16 +37,22 @@ class FilmAggregator:
             tmdb_data = self.tmdb_service.get_movie_details(
                 tmdb_id,
                 append_to_response='credits',
-                language='ru-RU',
-                force_refresh=True  
+                language='ru-RU'
             )
             
-            if not tmdb_data:
+            if not tmdb_data or 'id' not in tmdb_data:
                 logger.error(f"No data from TMDB for ID {tmdb_id}")
+                return None
+            
+            if not tmdb_data.get('title'):
+                logger.error(f"Empty title in TMDB data for ID {tmdb_id}")
                 return None
             
             release_date = tmdb_data.get('release_date', '')
             year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+            
+            poster_path = tmdb_data.get('poster_path', '')
+            poster_url = f"https://image.tmdb.org/t/p/original{poster_path}" if poster_path else None
             
             film_data = {
                 'tmdb_id': tmdb_id,
@@ -56,7 +60,7 @@ class FilmAggregator:
                 'original_title': tmdb_data.get('original_title', ''),
                 'year': year,
                 'description': tmdb_data.get('overview', ''),
-                'poster_url': f"https://image.tmdb.org/t/p/original{tmdb_data.get('poster_path', '')}" if tmdb_data.get('poster_path') else None,
+                'poster_url': poster_url,
                 'imdb_id': tmdb_data.get('imdb_id', ''),
                 'runtime': tmdb_data.get('runtime'),
                 'genres': [genre['name'] for genre in tmdb_data.get('genres', [])],
@@ -65,9 +69,9 @@ class FilmAggregator:
                 'tmdb_votes': tmdb_data.get('vote_count'),
             }
             
-            ratings = self._get_all_ratings(tmdb_data)
-            film_data['ratings'] = ratings
+            film_data['ratings'] = self._get_all_ratings(film_data['imdb_id'], film_data['title'], film_data['year'])
             
+            ratings = film_data['ratings']
             if ratings:
                 normalized_ratings = []
                 for rating in ratings.values():
@@ -84,18 +88,20 @@ class FilmAggregator:
             directors = []
             for person in credits.get('crew', []):
                 if person.get('job') == 'Director':
+                    profile_path = person.get('profile_path', '')
                     directors.append({
                         'name': person.get('name', ''),
-                        'photo_url': f"https://image.tmdb.org/t/p/w185{person.get('profile_path')}" if person.get('profile_path') else None,
+                        'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
                     })
-            film_data['directors'] = directors[:3]  
+            film_data['directors'] = directors[:3]
             
             actors = []
             for person in credits.get('cast', [])[:10]:
+                profile_path = person.get('profile_path', '')
                 actors.append({
                     'name': person.get('name', ''),
                     'character': person.get('character', ''),
-                    'photo_url': f"https://image.tmdb.org/t/p/w185{person.get('profile_path')}" if person.get('profile_path') else None,
+                    'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
                 })
             film_data['actors'] = actors
             
@@ -107,102 +113,48 @@ class FilmAggregator:
             logger.error(f"Error aggregating film data for TMDB ID {tmdb_id}: {str(e)}")
             return None
     
-    def _get_all_ratings(self, tmdb_data: Dict) -> Dict:
+    def _get_all_ratings(self, imdb_id: str, title: str, year: int) -> Dict:
         """
         Получение рейтингов из всех источников.
-        
-        Returns:
-            Dict: Словарь со всеми рейтингами
         """
         ratings = {}
         
-        if tmdb_data.get('vote_average'):
-            ratings['tmdb'] = {
-                'source': 'TMDB',
-                'value': tmdb_data.get('vote_average'),
-                'max_value': 10,
-                'normalized_value': tmdb_data.get('vote_average'),
-                'votes': tmdb_data.get('vote_count', 0)
-            }
+        if imdb_id:
+            try:
+                omdb_ratings = self.omdb_service.get_movie_ratings(imdb_id)
+                ratings.update(omdb_ratings)
+            except Exception as e:
+                logger.error(f"Error getting OMDb ratings for {imdb_id}: {str(e)}")
         
-        imdb_id = tmdb_data.get('imdb_id')
-        if not imdb_id:
-            return ratings
+        if imdb_id:
+            try:
+                kinopoisk_movie = self.kinopoisk_service.get_movie_by_imdb_id(imdb_id)
+                if kinopoisk_movie:
+                    kp_ratings = self.kinopoisk_service.get_movie_rating(kinopoisk_movie)
+                    if 'kinopoisk' in kp_ratings:
+                        ratings['kinopoisk'] = kp_ratings['kinopoisk']
+            except Exception as e:
+                logger.error(f"Error getting Kinopoisk ratings by IMDb ID {imdb_id}: {str(e)}")
         
-        try:
-            omdb_ratings = self.omdb_service.get_movie_ratings(imdb_id)
-            
-            if 'imdb' in omdb_ratings:
-                ratings['imdb'] = {
-                    'source': 'IMDb',
-                    'value': omdb_ratings['imdb']['value'],
-                    'max_value': omdb_ratings['imdb']['max_value'],
-                    'normalized_value': omdb_ratings['imdb']['value'],
-                    'votes': omdb_ratings['imdb'].get('votes', 0)
-                }
-            
-            if 'rotten_tomatoes' in omdb_ratings:
-                ratings['rotten_tomatoes'] = {
-                    'source': 'Rotten Tomatoes',
-                    'value': omdb_ratings['rotten_tomatoes']['value'],
-                    'max_value': omdb_ratings['rotten_tomatoes']['max_value'],
-                    'normalized_value': omdb_ratings['rotten_tomatoes']['value'] / 10,  # Из 100% в 10
-                    'votes': None
-                }
-            
-            if 'metacritic' in omdb_ratings:
-                ratings['metacritic'] = {
-                    'source': 'Metacritic',
-                    'value': omdb_ratings['metacritic']['value'],
-                    'max_value': omdb_ratings['metacritic']['max_value'],
-                    'normalized_value': omdb_ratings['metacritic']['value'] / 10,  # Из 100 в 10
-                    'votes': None
-                }
-                
-        except Exception as e:
-            logger.error(f"Error getting OMDb ratings: {str(e)}")
-        
-        try:
-            title = tmdb_data.get('title', '')
-            year = tmdb_data.get('release_date', '')[:4] if tmdb_data.get('release_date') else None
-            
-            search_results = self.kinopoisk_service.search_movies(title, year=year, page=1)
-            
-            if search_results.get('items'):
-                kinopoisk_movie = search_results['items'][0]
-                
-                if kinopoisk_movie.get('ratingKinopoisk'):
-                    ratings['kinopoisk'] = {
-                        'source': 'Кинопоиск',
-                        'value': kinopoisk_movie['ratingKinopoisk'],
-                        'max_value': 10,
-                        'normalized_value': kinopoisk_movie['ratingKinopoisk'],
-                        'votes': kinopoisk_movie.get('ratingKinopoiskVoteCount', 0)
-                    }
-                
-                if kinopoisk_movie.get('ratingImdb') and 'imdb' not in ratings:
-                    ratings['imdb'] = {
-                        'source': 'IMDb',
-                        'value': kinopoisk_movie['ratingImdb'],
-                        'max_value': 10,
-                        'normalized_value': kinopoisk_movie['ratingImdb'],
-                        'votes': kinopoisk_movie.get('ratingImdbVoteCount', 0)
-                    }
-                    
-        except Exception as e:
-            logger.error(f"Error getting Kinopoisk ratings: {str(e)}")
+        if 'kinopoisk' not in ratings and title:
+            try:
+                search_results = self.kinopoisk_service.search_movies(title, year=year, page=1)
+                if search_results.get('items'):
+                    kinopoisk_movie = search_results['items'][0]
+                    kp_ratings = self.kinopoisk_service.get_movie_rating(kinopoisk_movie)
+                    if 'kinopoisk' in kp_ratings:
+                        ratings['kinopoisk'] = kp_ratings['kinopoisk']
+            except Exception as e:
+                logger.error(f"Error searching Kinopoisk by title {title}: {str(e)}")
         
         return ratings
     
     def search_films(self, query: str, year: Optional[int] = None) -> List[Dict]:
         """
         Поиск фильмов в TMDB.
-        
-        Returns:
-            List[Dict]: Список найденных фильмов
         """
         try:
-            cache_key = f'film_search_{query}_{year}'
+            cache_key = self._clean_cache_key(f'film_search_{query}_{year}')
             cached_results = cache.get(cache_key)
             if cached_results:
                 return cached_results
@@ -215,13 +167,22 @@ class FilmAggregator:
             
             films = []
             for result in search_results.get('results', [])[:20]:
+                if not result.get('id'):
+                    continue
+                    
+                release_date = result.get('release_date', '')
+                film_year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+                
+                poster_path = result.get('poster_path', '')
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+                
                 film_data = {
                     'tmdb_id': result.get('id'),
                     'title': result.get('title', ''),
                     'original_title': result.get('original_title', ''),
-                    'year': result.get('release_date', '')[:4] if result.get('release_date') else None,
+                    'year': film_year,
                     'description': result.get('overview', ''),
-                    'poster_url': f"https://image.tmdb.org/t/p/w500{result.get('poster_path')}" if result.get('poster_path') else None,
+                    'poster_url': poster_url,
                     'tmdb_rating': result.get('vote_average'),
                     'tmdb_votes': result.get('vote_count'),
                 }

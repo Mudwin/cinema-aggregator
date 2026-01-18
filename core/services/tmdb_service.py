@@ -43,22 +43,14 @@ class TMDBService(BaseAPIClient):
     def get_movie_details(self, tmdb_id, append_to_response=None, language='ru-RU', force_refresh=False):
         """
         Получение детальной информации о фильме.
-        
-        Args:
-            tmdb_id (int): ID фильма в TMDB
-            append_to_response (str, optional): Дополнительные данные (videos,credits и т.д.)
-            language (str): Язык ответа
-            force_refresh (bool): Принудительно обновить кэш
-        
-        Returns:
-            dict: Информация о фильме
         """
         params = {"language": language}
         if append_to_response:
             params["append_to_response"] = append_to_response
             
         if force_refresh:
-            cache_key = self.get_cache_key('GET', f"movie/{tmdb_id}", params)
+            cache_key = f"tmdb_movie_{tmdb_id}_{language}_{append_to_response}"
+            from django.core.cache import cache
             cache.delete(cache_key)
         
         return self.get(f"movie/{tmdb_id}", params=params)

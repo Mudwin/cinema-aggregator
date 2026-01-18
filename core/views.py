@@ -2,7 +2,6 @@ import logging
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.core.cache import cache
-from django.views.decorators.http import require_http_methods
 
 from .services.film_aggregator import FilmAggregator
 
@@ -46,9 +45,6 @@ def film_search(request):
 def film_detail(request, tmdb_id):
     """Страница фильма со всеми рейтингами в реальном времени."""
     try:
-        cache_key = f'film_full_data_{tmdb_id}'
-        cache.delete(cache_key)
-        
         aggregator = FilmAggregator()
         film_data = aggregator.get_film_data(tmdb_id)
         
@@ -57,9 +53,19 @@ def film_detail(request, tmdb_id):
             return redirect('film_search')
         
         ratings_list = []
-        for source, rating in film_data.get('ratings', {}).items():
+        for source_key, rating in film_data.get('ratings', {}).items():
+            source_names = {
+                'tmdb': 'TMDB',
+                'imdb': 'IMDb',
+                'kinopoisk': 'Кинопоиск',
+                'rotten_tomatoes': 'Rotten Tomatoes',
+                'metacritic': 'Metacritic',
+            }
+            
+            source_name = source_names.get(source_key, source_key)
+            
             ratings_list.append({
-                'source': rating['source'],
+                'source': source_name,
                 'value': rating['value'],
                 'max_value': rating['max_value'],
                 'normalized_value': rating.get('normalized_value'),
@@ -67,23 +73,14 @@ def film_detail(request, tmdb_id):
             })
         
         source_order = ['tmdb', 'imdb', 'kinopoisk', 'rotten_tomatoes', 'metacritic']
-        ratings_list.sort(key=lambda x: source_order.index(x['source'].lower()) 
-                         if x['source'].lower() in source_order else 999)
+        ratings_list.sort(key=lambda x: (
+            source_order.index(x['source'].lower()) 
+            if x['source'].lower() in source_order 
+            else 999
+        ))
         
         context = {
-            'film': {
-                'tmdb_id': film_data['tmdb_id'],
-                'title': film_data['title'],
-                'original_title': film_data['original_title'],
-                'year': film_data['year'],
-                'description': film_data['description'],
-                'poster_url': film_data['poster_url'],
-                'runtime': film_data.get('runtime'),
-                'genres': film_data.get('genres', []),
-                'countries': film_data.get('countries', []),
-                'average_rating': film_data.get('average_rating'),
-                'ratings_count': film_data.get('ratings_count', 0),
-            },
+            'film': film_data,
             'ratings': ratings_list,
             'directors': film_data.get('directors', []),
             'actors': film_data.get('actors', []),
@@ -93,14 +90,19 @@ def film_detail(request, tmdb_id):
         
     except Exception as e:
         logger.error(f"Error in film detail for TMDB ID {tmdb_id}: {str(e)}")
-        messages.error(request, f'Ошибка при загрузке данных фильма: {str(e)}')
+        messages.error(request, 'Ошибка при загрузке данных фильма')
         return redirect('film_search')
 
 
 def force_refresh(request, tmdb_id):
     """Принудительное обновление данных фильма."""
-    cache_key = f'film_full_data_{tmdb_id}'
-    cache.delete(cache_key)
+    cache_keys = [
+        f'film_full_data_{tmdb_id}',
+        f'tmdb_movie_{tmdb_id}_ru_RU_credits',
+    ]
     
-    messages.success(request, 'Данные фильма обновлены')
+    for key in cache_keys:
+        cache.delete(key)
+    
+    messages.success(request, 'Данные фильма будут обновлены при следующем просмотре')
     return redirect('film_detail', tmdb_id=tmdb_id)
