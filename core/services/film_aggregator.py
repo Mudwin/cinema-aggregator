@@ -1,4 +1,3 @@
-# cinema-aggregator/core/services/film_aggregator.py
 import logging
 import re
 from typing import Dict, List, Optional
@@ -33,29 +32,28 @@ class FilmAggregator:
             cache_key = f'film_full_data_{tmdb_id}'
             cached_data = cache.get(cache_key)
             if cached_data:
-                if cached_data.get('tmdb_id') == tmdb_id:
-                    return cached_data
-                else:
-                    cache.delete(cache_key)
+                return cached_data
             
-            tmdb_data = self.tmdb_service.get_movie_details(
-                tmdb_id,
-                append_to_response='credits',
-                language='ru-RU'
-            )
+            tmdb_data = self._get_tmdb_movie_data(tmdb_id)
             
-            if not tmdb_data or 'id' not in tmdb_data:
-                logger.error(f"No data from TMDB for ID {tmdb_id}")
-                return None
-            
-            if tmdb_data.get('id') != tmdb_id:
-                logger.error(f"TMDB returned wrong movie! Requested: {tmdb_id}, Got: {tmdb_data.get('id')}")
+            if not tmdb_data:
+                logger.error(f"No valid data from TMDB for ID {tmdb_id}")
                 return None
             
             if not tmdb_data.get('title'):
                 logger.error(f"Empty title in TMDB data for ID {tmdb_id}")
                 return None
             
+            title = tmdb_data.get('title', '')
+            original_title = tmdb_data.get('original_title', '')
+
+            if title == original_title and original_title:
+                search_title = original_title
+            else:
+                search_title = title if title else original_title
+
+            kinopoisk_search_title = search_title
+
             release_date = tmdb_data.get('release_date', '')
             year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
             
@@ -63,7 +61,7 @@ class FilmAggregator:
             poster_url = f"https://image.tmdb.org/t/p/original{poster_path}" if poster_path else None
             
             film_data = {
-                'tmdb_id': tmdb_id,
+                'tmdb_id': tmdb_data.get('id'),
                 'title': tmdb_data.get('title', ''),
                 'original_title': tmdb_data.get('original_title', ''),
                 'year': year,
@@ -124,6 +122,65 @@ class FilmAggregator:
         except Exception as e:
             logger.error(f"Error aggregating film data for TMDB ID {tmdb_id}: {str(e)}")
             return None
+    
+    def _get_tmdb_movie_data(self, tmdb_id: int) -> Optional[Dict]:
+        """
+        Получение данных о фильме из TMDB с несколькими попытками и fallback.
+        """
+        languages = ['ru-RU', 'en-US']
+        
+        for language in languages:
+            tmdb_data = self.tmdb_service.get_movie_details(
+                tmdb_id,
+                append_to_response='credits',
+                language=language
+            )
+            
+            if tmdb_data and tmdb_data.get('id') == tmdb_id:
+                return tmdb_data
+        
+        logger.warning(f"Could not get movie {tmdb_id} directly, trying search...")
+        
+        search_cache_key = f'tmdb_movie_title_{tmdb_id}'
+        movie_title = cache.get(search_cache_key)
+        
+        if not movie_title:
+            for language in languages:
+                temp_data = self.tmdb_service.get_movie_details(
+                    tmdb_id,
+                    language=language
+                )
+                if temp_data and temp_data.get('title'):
+                    movie_title = temp_data.get('title')
+                    cache.set(search_cache_key, movie_title, 3600)
+                    break
+        
+        if movie_title:
+            search_results = self.tmdb_service.search_movies(
+                query=movie_title,
+                year=None,
+                page=1,
+                language='en-US'
+            )
+            
+            if search_results.get('results'):
+                first_result = search_results['results'][0]
+                correct_tmdb_id = first_result.get('id')
+                
+                if correct_tmdb_id and correct_tmdb_id != tmdb_id:
+                    logger.info(f"Found correct ID for {movie_title}: {correct_tmdb_id} (was {tmdb_id})")
+                    
+                    for language in languages:
+                        tmdb_data = self.tmdb_service.get_movie_details(
+                            correct_tmdb_id,
+                            append_to_response='credits',
+                            language=language
+                        )
+                        
+                        if tmdb_data and tmdb_data.get('id') == correct_tmdb_id:
+                            return tmdb_data
+        
+        return None
     
     def _get_all_ratings(self, imdb_id: str, title: str, year: int) -> Dict:
         """

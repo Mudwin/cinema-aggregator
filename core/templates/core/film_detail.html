@@ -51,7 +51,7 @@
                 
                 <!-- Кнопка обновления данных -->
                 <div class="mt-4">
-                    <a href="{% url 'force_refresh' film.tmdb_id %}" class="btn btn-outline-secondary w-100">
+                    <a href="{% url 'force_refresh' film.kinopoisk_id %}" class="btn btn-outline-secondary w-100">
                         <i class="bi bi-arrow-clockwise"></i> Обновить данные
                     </a>
                 </div>
@@ -150,7 +150,7 @@
                 
                 <!-- Обновление данных -->
                 <div class="mt-3">
-                    <a href="{% url 'force_refresh' film.tmdb_id %}" class="btn btn-outline-primary">
+                    <a href="{% url 'force_refresh' film.kinopoisk_id %}" class="btn btn-outline-primary">
                         <i class="bi bi-arrow-clockwise"></i> Обновить все рейтинги
                     </a>
                     <small class="text-muted ms-2">Данные кэшируются на 1 час</small>

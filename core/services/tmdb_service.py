@@ -59,13 +59,12 @@ class TMDBService(BaseAPIClient):
     @api_request_logger
     def get_movie_details(self, tmdb_id, append_to_response=None, language='ru-RU', force_refresh=False):
         """
-        Получение детальной информации о фильме.
+        Получение детальной информации о фильме с проверкой корректности.
         """
         params = {"language": language}
         if append_to_response:
             params["append_to_response"] = append_to_response
         
-        # Уникальный ключ кэша для каждого фильма
         cache_key = f"tmdb_movie_{tmdb_id}_{language}_{append_to_response}"
         
         if force_refresh:
@@ -73,17 +72,21 @@ class TMDBService(BaseAPIClient):
         
         cached = self._get_cached(cache_key)
         if cached:
-            return cached
-            
+            if cached.get('id') == tmdb_id:
+                return cached
+            else:
+                self._delete_cached(cache_key)
+        
         result = self.get(f"movie/{tmdb_id}", params=params)
         
-        # Валидация данных: убедимся, что это правильный фильм
-        if result.get('id') != tmdb_id:
-            logger.error(f"TMDB returned wrong movie! Requested ID: {tmdb_id}, Got ID: {result.get('id')}")
-            self._delete_cached(cache_key)
+        if result and result.get('id') != tmdb_id:
+            logger.warning(f"TMDB returned wrong movie for ID {tmdb_id} with language {language}. "
+                        f"Requested: {tmdb_id}, Got: {result.get('id')}")
             return None
-            
-        self._set_cached(cache_key, result)
+        
+        if result:
+            self._set_cached(cache_key, result)
+        
         return result
     
     @api_request_logger
@@ -155,6 +158,21 @@ class TMDBService(BaseAPIClient):
         self._set_cached(cache_key, result)
         return result
     
+    @api_request_logger
+    def get_movie_details_with_fallback(self, tmdb_id: int) -> Optional[Dict]:
+        """
+        Получение детальной информации о фильме с использованием fallback.
+        """
+        for language in ['ru-RU', 'en-US']:
+            try:
+                result = self.get_movie_details(tmdb_id, language=language, force_refresh=True)
+                if result and result.get('id') == tmdb_id:
+                    return result
+            except Exception:
+                continue
+        
+        return None
+        
     def _get_cached(self, cache_key: str):
         """Получение данных из кэша."""
         from django.core.cache import cache
