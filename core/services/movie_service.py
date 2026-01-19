@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Dict, List, Optional, Tuple
 from django.core.cache import cache
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class MovieService:
     """
-    Основной сервис для работы с фильмами, использующий Kinopoisk как основной источник.
+    Основной сервис для работы с фильмами.
     """
     
     def __init__(self):
@@ -19,12 +20,19 @@ class MovieService:
         self.omdb_service = OMDbService()
         self.kinopoisk_service = KinopoiskService()
     
+    def _clean_cache_key(self, key: str) -> str:
+        """
+        Очистка ключа кэша от недопустимых символов.
+        """
+        return re.sub(r'[^a-zA-Z0-9]', '_', key)
+    
     def search_movies(self, query: str, year: Optional[int] = None) -> List[Dict]:
         """
         Поиск фильмов через Kinopoisk API.
         """
         try:
-            cache_key = f'kp_search_{query}_{year}'
+            safe_query = self._clean_cache_key(query)
+            cache_key = f'movie_search_{safe_query}_{year}'
             cached_results = cache.get(cache_key)
             if cached_results:
                 return cached_results
@@ -40,16 +48,12 @@ class MovieService:
                 if not item.get('kinopoiskId'):
                     continue
                 
-                kp_details = self.kinopoisk_service.get_movie_details(item['kinopoiskId'])
-                
                 film = {
                     'kinopoisk_id': item['kinopoiskId'],
                     'title': item.get('nameRu') or item.get('nameOriginal') or item.get('nameEn', ''),
                     'original_title': item.get('nameOriginal') or item.get('nameEn') or item.get('nameRu', ''),
                     'year': item.get('year'),
-                    'description': kp_details.get('description', ''),
                     'poster_url': item.get('posterUrl'),
-                    'poster_url_preview': item.get('posterUrlPreview'),
                     'imdb_id': item.get('imdbId', ''),
                     'genres': [genre['genre'] for genre in item.get('genres', [])],
                     'countries': [country['country'] for country in item.get('countries', [])],
@@ -57,11 +61,6 @@ class MovieService:
                     'rating_imdb': item.get('ratingImdb'),
                     'type': item.get('type', 'FILM'),
                 }
-                
-                tmdb_id = self._find_tmdb_id(film['title'], film['original_title'], film['year'])
-                if tmdb_id:
-                    film['tmdb_id'] = tmdb_id
-                
                 films.append(film)
             
             cache.set(cache_key, films, 300)
@@ -71,56 +70,28 @@ class MovieService:
             logger.error(f"Error searching movies via Kinopoisk: {str(e)}")
             return []
     
-    def _find_tmdb_id(self, title: str, original_title: str, year: int) -> Optional[int]:
-        """
-        Поиск TMDB ID по названию фильма.
-        """
-        try:
-            search_results = self.tmdb_service.search_movies(
-                query=title,
-                year=year,
-                page=1,
-                language='ru-RU'
-            )
-            
-            if search_results.get('results'):
-                for result in search_results['results']:
-                    if result.get('title') == title or result.get('original_title') == original_title:
-                        return result.get('id')
-            
-            if original_title and original_title != title:
-                search_results = self.tmdb_service.search_movies(
-                    query=original_title,
-                    year=year,
-                    page=1,
-                    language='en-US'
-                )
-                
-                if search_results.get('results'):
-                    for result in search_results['results']:
-                        if result.get('title') == original_title or result.get('original_title') == original_title:
-                            return result.get('id')
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error finding TMDB ID for {title}: {str(e)}")
-            return None
-    
     def get_movie_data(self, kinopoisk_id: int) -> Optional[Dict]:
         """
         Получение полных данных о фильме по Kinopoisk ID.
         """
+
+        logger.info(f"=== START get_movie_data for ID: {kinopoisk_id} ===")
+
         try:
-            cache_key = f'movie_full_data_{kinopoisk_id}'
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return cached_data
+            # cache_key = f'film_data_{kinopoisk_id}'
+            # cached_data = cache.get(cache_key)
+            # if cached_data:
+            #     return cached_data
             
             kp_details = self.kinopoisk_service.get_movie_details(kinopoisk_id)
             
             if not kp_details:
                 logger.error(f"No data from Kinopoisk for ID {kinopoisk_id}")
+                return None
+            
+            result_id = kp_details.get('kinopoiskId') or kp_details.get('kinopoisk_id') or kp_details.get('id')
+            if result_id != kinopoisk_id:
+                logger.error(f"Kinopoisk returned wrong movie! Expected: {kinopoisk_id}, Got: {result_id}")
                 return None
             
             film_data = {
@@ -134,9 +105,6 @@ class MovieService:
                 'runtime': kp_details.get('filmLength'),
                 'genres': [genre['genre'] for genre in kp_details.get('genres', [])],
                 'countries': [country['country'] for country in kp_details.get('countries', [])],
-                'rating_kinopoisk': kp_details.get('ratingKinopoisk'),
-                'rating_imdb': kp_details.get('ratingImdb'),
-                'rating_film_critics': kp_details.get('ratingFilmCritics'),
             }
             
             ratings = {}
@@ -144,7 +112,7 @@ class MovieService:
             kp_rating = kp_details.get('ratingKinopoisk')
             if kp_rating:
                 ratings['kinopoisk'] = {
-                    'value': kp_rating,
+                    'value': float(kp_rating),
                     'max_value': 10,
                     'votes': kp_details.get('ratingKinopoiskVoteCount', 0)
                 }
@@ -152,7 +120,7 @@ class MovieService:
             imdb_rating = kp_details.get('ratingImdb')
             if imdb_rating:
                 ratings['imdb'] = {
-                    'value': imdb_rating,
+                    'value': float(imdb_rating),
                     'max_value': 10,
                     'votes': kp_details.get('ratingImdbVoteCount', 0)
                 }
@@ -160,57 +128,13 @@ class MovieService:
             if film_data['imdb_id']:
                 try:
                     omdb_ratings = self.omdb_service.get_movie_ratings(film_data['imdb_id'])
-                    ratings.update(omdb_ratings)
+                    
+                    for source, rating in omdb_ratings.items():
+                        if source not in ratings:
+                            ratings[source] = rating
+                            
                 except Exception as e:
                     logger.error(f"Error getting OMDb ratings: {str(e)}")
-            
-            tmdb_id = self._find_tmdb_id(film_data['title'], film_data['original_title'], film_data['year'])
-            
-            if tmdb_id:
-                try:
-                    tmdb_data = self.tmdb_service.get_movie_details(
-                        tmdb_id,
-                        append_to_response='credits',
-                        language='ru-RU'
-                    )
-                    
-                    if tmdb_data and tmdb_data.get('id') == tmdb_id:
-                        film_data['tmdb_id'] = tmdb_id
-                        
-                        # Режиссеры
-                        directors = []
-                        for person in tmdb_data.get('credits', {}).get('crew', []):
-                            if person.get('job') == 'Director':
-                                profile_path = person.get('profile_path', '')
-                                directors.append({
-                                    'name': person.get('name', ''),
-                                    'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
-                                })
-                        film_data['directors'] = directors[:3]
-                        
-                        # Актеры
-                        actors = []
-                        for person in tmdb_data.get('credits', {}).get('cast', [])[:10]:
-                            profile_path = person.get('profile_path', '')
-                            actors.append({
-                                'name': person.get('name', ''),
-                                'character': person.get('character', ''),
-                                'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
-                            })
-                        film_data['actors'] = actors
-                        
-                        # Дополнительная информация из TMDB
-                        if not film_data.get('poster_url') and tmdb_data.get('poster_path'):
-                            film_data['poster_url'] = f"https://image.tmdb.org/t/p/original{tmdb_data['poster_path']}"
-                        
-                        if not film_data.get('description') and tmdb_data.get('overview'):
-                            film_data['description'] = tmdb_data.get('overview')
-                        
-                        film_data['tmdb_rating'] = tmdb_data.get('vote_average')
-                        film_data['tmdb_votes'] = tmdb_data.get('vote_count')
-                    
-                except Exception as e:
-                    logger.error(f"Error getting TMDB data: {str(e)}")
             
             normalized_ratings = []
             for source, rating in ratings.items():
@@ -229,9 +153,12 @@ class MovieService:
             
             film_data['ratings'] = ratings
             
-            cache.set(cache_key, film_data, 3600)
+            # cache.set(cache_key, film_data, 3600)
+            
             return film_data
             
         except Exception as e:
-            logger.error(f"Error getting movie data for Kinopoisk ID {kinopoisk_id}: {str(e)}")
+            logger.error(f"=== ERROR get_movie_data for ID {kinopoisk_id}: {str(e)} ===")
+            import traceback
+            logger.error(traceback.format_exc())
             return None

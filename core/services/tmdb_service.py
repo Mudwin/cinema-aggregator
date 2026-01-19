@@ -13,7 +13,7 @@ class TMDBService(BaseAPIClient):
     """
     
     BASE_URL = "https://api.themoviedb.org/3"
-    CACHE_TIMEOUT = 3600 * 24  # 24 часа для TMDB 
+    CACHE_TIMEOUT = 3600 * 24  
     
     def setup_session(self):
         """Настройка сессии для TMDB API"""
@@ -25,13 +25,18 @@ class TMDBService(BaseAPIClient):
     
     def get_cache_key(self, method: str, params: Dict) -> str:
         """
-        Переопределяем метод генерации ключа кэша с учетом URL.
+        Переопределяем метод генерации ключа кэша для TMDB.
         """
         import hashlib
         import json
         
-        cache_str = f"{method}:{self.BASE_URL}:{json.dumps(params, sort_keys=True)}"
-        return f"tmdb_api:{hashlib.md5(cache_str.encode()).hexdigest()}"
+        cache_parts = [
+            "tmdb_api",
+            method,
+            json.dumps(params, sort_keys=True)
+        ]
+        cache_str = ":".join(cache_parts)
+        return f"tmdb:{hashlib.md5(cache_str.encode()).hexdigest()}"
     
     @api_request_logger
     def search_movies(self, query: str, year: Optional[int] = None, page: int = 1, language: str = 'ru-RU') -> Dict:
@@ -47,47 +52,48 @@ class TMDBService(BaseAPIClient):
         if year:
             params["year"] = year
             
-        cache_key = f"tmdb_search_{query}_{year}_{page}_{language}"
-        cached = self._get_cached(cache_key)
-        if cached:
-            return cached
-            
-        result = self.get("search/movie", params=params)
-        self._set_cached(cache_key, result)
-        return result
+        return self.get("search/movie", params=params)
     
     @api_request_logger
-    def get_movie_details(self, tmdb_id, append_to_response=None, language='ru-RU', force_refresh=False):
+    def get_movie_details(self, tmdb_id: int, append_to_response: Optional[str] = None, 
+                         language: str = 'ru-RU', force_refresh: bool = False) -> Optional[Dict]:
         """
-        Получение детальной информации о фильме с проверкой корректности.
+        Получение детальной информации о фильме.
+        Возвращает None если получены некорректные данные.
         """
         params = {"language": language}
         if append_to_response:
             params["append_to_response"] = append_to_response
         
-        cache_key = f"tmdb_movie_{tmdb_id}_{language}_{append_to_response}"
+        use_cache = not force_refresh
         
-        if force_refresh:
-            self._delete_cached(cache_key)
-        
-        cached = self._get_cached(cache_key)
-        if cached:
-            if cached.get('id') == tmdb_id:
-                return cached
-            else:
-                self._delete_cached(cache_key)
-        
-        result = self.get(f"movie/{tmdb_id}", params=params)
-        
-        if result and result.get('id') != tmdb_id:
-            logger.warning(f"TMDB returned wrong movie for ID {tmdb_id} with language {language}. "
-                        f"Requested: {tmdb_id}, Got: {result.get('id')}")
+        try:
+            result = self.get(f"movie/{tmdb_id}", params=params, use_cache=use_cache)
+            
+            if not result or result.get('id') != tmdb_id:
+                logger.warning(f"TMDB returned wrong data for ID {tmdb_id}. Expected: {tmdb_id}, Got: {result.get('id') if result else 'None'}")
+                return None
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting movie details for {tmdb_id}: {str(e)}")
             return None
-        
-        if result:
-            self._set_cached(cache_key, result)
-        
-        return result
+    
+    @api_request_logger
+    def search_movie_by_title(self, title: str, year: Optional[int] = None, 
+                             language: str = 'ru-RU') -> Optional[Dict]:
+        """
+        Поиск фильма по названию и возврат первого результата.
+        """
+        try:
+            search_results = self.search_movies(title, year, language=language)
+            if search_results.get('results'):
+                return search_results['results'][0]
+            return None
+        except Exception as e:
+            logger.error(f"Error searching movie by title {title}: {str(e)}")
+            return None
     
     @api_request_logger
     def search_person(self, query: str, page: int = 1, language: str = 'ru-RU') -> Dict:
@@ -100,92 +106,4 @@ class TMDBService(BaseAPIClient):
             "language": language,
             "include_adult": "false"
         }
-        
-        cache_key = f"tmdb_person_search_{query}_{page}_{language}"
-        cached = self._get_cached(cache_key)
-        if cached:
-            return cached
-            
-        result = self.get("search/person", params=params)
-        self._set_cached(cache_key, result)
-        return result
-    
-    @api_request_logger
-    def get_person_details(self, tmdb_id: int, language: str = 'ru-RU') -> Dict:
-        """
-        Получение детальной информации о персоне.
-        """
-        params = {"language": language}
-        
-        cache_key = f"tmdb_person_{tmdb_id}_{language}"
-        cached = self._get_cached(cache_key)
-        if cached:
-            return cached
-            
-        result = self.get(f"person/{tmdb_id}", params=params)
-        self._set_cached(cache_key, result)
-        return result
-    
-    @api_request_logger
-    def get_person_movie_credits(self, tmdb_id: int, language: str = 'ru-RU') -> Dict:
-        """
-        Получение фильмографии персоны.
-        """
-        params = {"language": language}
-        
-        cache_key = f"tmdb_person_credits_{tmdb_id}_{language}"
-        cached = self._get_cached(cache_key)
-        if cached:
-            return cached
-            
-        result = self.get(f"person/{tmdb_id}/movie_credits", params=params)
-        self._set_cached(cache_key, result)
-        return result
-    
-    @api_request_logger
-    def get_movie_credits(self, tmdb_id: int, language: str = 'ru-RU') -> Dict:
-        """
-        Получение информации о съемочной группе и актерах.
-        """
-        params = {"language": language}
-        
-        cache_key = f"tmdb_movie_credits_{tmdb_id}_{language}"
-        cached = self._get_cached(cache_key)
-        if cached:
-            return cached
-            
-        result = self.get(f"movie/{tmdb_id}/credits", params=params)
-        self._set_cached(cache_key, result)
-        return result
-    
-    @api_request_logger
-    def get_movie_details_with_fallback(self, tmdb_id: int) -> Optional[Dict]:
-        """
-        Получение детальной информации о фильме с использованием fallback.
-        """
-        for language in ['ru-RU', 'en-US']:
-            try:
-                result = self.get_movie_details(tmdb_id, language=language, force_refresh=True)
-                if result and result.get('id') == tmdb_id:
-                    return result
-            except Exception:
-                continue
-        
-        return None
-        
-    def _get_cached(self, cache_key: str):
-        """Получение данных из кэша."""
-        from django.core.cache import cache
-        return cache.get(cache_key)
-    
-    def _set_cached(self, cache_key: str, data, timeout=None):
-        """Сохранение данных в кэш."""
-        from django.core.cache import cache
-        if timeout is None:
-            timeout = self.CACHE_TIMEOUT
-        cache.set(cache_key, data, timeout)
-    
-    def _delete_cached(self, cache_key: str):
-        """Удаление данных из кэша."""
-        from django.core.cache import cache
-        cache.delete(cache_key)
+        return self.get("search/person", params=params)

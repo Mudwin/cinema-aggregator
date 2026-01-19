@@ -156,10 +156,11 @@ TMDB_API_KEY = os.getenv('TMDB_API_KEY', '')
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
-        'KEY_PREFIX': 'cinema_aggregator',
-        'TIMEOUT': 60 * 60 * 24,
+        # 'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        # 'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
+        # 'KEY_PREFIX': 'cinema_aggregator',
+        # 'TIMEOUT': 60 * 60 * 24,
     }
 }
 

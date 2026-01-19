@@ -51,21 +51,14 @@ class BaseAPIClient:
             'Accept': 'application/json',
         })
     
-    def get_cache_key(self, method: str, params: Dict) -> str:
+    def get_cache_key(self, method: str, params: Dict, endpoint: str = "") -> str:
         """
-        Генерация ключа для кэша на основе метода и параметров.
-        
-        Args:
-            method (str): HTTP метод
-            params (Dict): Параметры запроса
-        
-        Returns:
-            str: Ключ для кэша
+        Генерация ключа для кэша на основе метода, параметров и эндпоинта.
         """
         import hashlib
         import json
         
-        cache_str = f"{method}:{self.BASE_URL}:{json.dumps(params, sort_keys=True)}"
+        cache_str = f"{method}:{self.BASE_URL}:{endpoint}:{json.dumps(params, sort_keys=True)}"
         return f"api_cache:{hashlib.md5(cache_str.encode()).hexdigest()}"
     
     def should_cache_request(self, method: str, params: Dict) -> bool:
@@ -122,30 +115,12 @@ class BaseAPIClient:
         data: Optional[Dict] = None,
         headers: Optional[Dict] = None,
         timeout: Optional[int] = None,
-        use_cache: bool = True,
+        use_cache: bool = False,
         cache_timeout: Optional[int] = None,
         retries: Optional[int] = None,
     ) -> Dict:
         """
-        Основной метод для выполнения HTTP запросов с кэшированием и retry.
-        
-        Args:
-            method (str): HTTP метод (GET, POST, etc.)
-            endpoint (str): Конечная точка API
-            params (Dict): Параметры запроса
-            data (Dict): Данные для POST/PUT запросов
-            headers (Dict): Дополнительные заголовки
-            timeout (int): Таймаут запроса
-            use_cache (bool): Использовать ли кэширование
-            cache_timeout (int): Время жизни кэша в секундах
-            retries (int): Количество повторных попыток
-        
-        Returns:
-            Dict: Ответ API в формате JSON
-        
-        Raises:
-            APIRequestError: При ошибках запроса
-            APIRateLimitError: При превышении лимита запросов
+        Основной метод для выполнения HTTP-запросов с кэшированием
         """
         if params is None:
             params = {}
@@ -159,10 +134,10 @@ class BaseAPIClient:
         
         cache_key = None
         if use_cache and self.should_cache_request(method, params):
-            cache_key = self.get_cache_key(method, params)
+            cache_key = self.get_cache_key(method, params, endpoint)
             cached_response = cache.get(cache_key)
             if cached_response:
-                logger.debug(f"Cache hit for {url}")
+                logger.debug(f"Cache hit for {url} (key: {cache_key})")
                 return cached_response
         
         last_exception = None
