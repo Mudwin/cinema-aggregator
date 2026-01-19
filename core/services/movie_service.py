@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from django.core.cache import cache
 
 from .tmdb_service import TMDBService
@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 class MovieService:
     """
     Основной сервис для работы с фильмами.
+    Использует Kinopoisk для основной информации и рейтингов,
+    TMDB для информации об актерах и режиссерах.
     """
     
     def __init__(self):
@@ -70,19 +72,58 @@ class MovieService:
             logger.error(f"Error searching movies via Kinopoisk: {str(e)}")
             return []
     
+    def _find_tmdb_id_for_film(self, title: str, original_title: str, year: int, imdb_id: str = None) -> Optional[int]:
+        """
+        Поиск TMDB ID для фильма по разным критериям.
+        """
+        if imdb_id:
+            try:
+                tmdb_data = self.tmdb_service.find_by_imdb_id(imdb_id, language='ru-RU')
+                
+                if tmdb_data and tmdb_data.get('movie_results'):
+                    movie_result = tmdb_data['movie_results'][0]
+                    if movie_result.get('id'):
+                        logger.info(f"Found TMDB ID {movie_result['id']} for IMDb {imdb_id}")
+                        return movie_result['id']
+            except Exception as e:
+                logger.debug(f"TMDB search by IMDb ID failed: {str(e)}")
+        
+        search_attempts = []
+        
+        if title:
+            search_attempts.append((title, 'ru-RU'))
+        
+        if original_title and original_title != title:
+            search_attempts.append((original_title, 'en-US'))
+        
+        for search_title, language in search_attempts:
+            try:
+                search_results = self.tmdb_service.search_movies(
+                    query=search_title,
+                    year=year,
+                    page=1,
+                    language=language
+                )
+                
+                if search_results.get('results'):
+                    first_result = search_results['results'][0]
+                    
+                    if first_result.get('release_date'):
+                        result_year = int(first_result['release_date'][:4]) if first_result['release_date'] else None
+                        if not year or not result_year or abs(result_year - year) <= 2:
+                            logger.info(f"Found TMDB ID {first_result['id']} for '{search_title}'")
+                            return first_result['id']
+            except Exception as e:
+                logger.debug(f"TMDB search by title failed for '{search_title}': {str(e)}")
+                continue
+        
+        return None
+    
     def get_movie_data(self, kinopoisk_id: int) -> Optional[Dict]:
         """
         Получение полных данных о фильме по Kinopoisk ID.
         """
-
-        logger.info(f"=== START get_movie_data for ID: {kinopoisk_id} ===")
-
         try:
-            # cache_key = f'film_data_{kinopoisk_id}'
-            # cached_data = cache.get(cache_key)
-            # if cached_data:
-            #     return cached_data
-            
             kp_details = self.kinopoisk_service.get_movie_details(kinopoisk_id)
             
             if not kp_details:
@@ -125,6 +166,58 @@ class MovieService:
                     'votes': kp_details.get('ratingImdbVoteCount', 0)
                 }
             
+            try:
+                tmdb_id = self._find_tmdb_id_for_film(
+                    title=film_data['title'],
+                    original_title=film_data['original_title'],
+                    year=film_data['year'],
+                    imdb_id=film_data.get('imdb_id')
+                )
+                
+                if tmdb_id:
+                    tmdb_data = self.tmdb_service.get_movie_details(
+                        tmdb_id,
+                        append_to_response='credits',
+                        language='ru-RU'
+                    )
+                    
+                    if tmdb_data and tmdb_data.get('credits'):
+                        credits = tmdb_data['credits']
+                        film_data['tmdb_id'] = tmdb_id
+                        
+                        # Режиссеры
+                        directors = []
+                        for person in credits.get('crew', []):
+                            if person.get('job') == 'Director':
+                                profile_path = person.get('profile_path', '')
+                                directors.append({
+                                    'name': person.get('name', ''),
+                                    'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
+                                })
+                        film_data['directors'] = directors[:3]  # Первые 3 режиссера
+                        
+                        # Актеры
+                        actors = []
+                        for person in credits.get('cast', [])[:10]:  # Первые 10 актеров
+                            profile_path = person.get('profile_path', '')
+                            actors.append({
+                                'name': person.get('name', ''),
+                                'character': person.get('character', ''),
+                                'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
+                            })
+                        film_data['actors'] = actors
+                    else:
+                        film_data['directors'] = []
+                        film_data['actors'] = []
+                else:
+                    film_data['directors'] = []
+                    film_data['actors'] = []
+                    
+            except Exception as e:
+                logger.error(f"Error getting TMDB data for actors/directors: {str(e)}")
+                film_data['directors'] = []
+                film_data['actors'] = []
+            
             if film_data['imdb_id']:
                 try:
                     omdb_ratings = self.omdb_service.get_movie_ratings(film_data['imdb_id'])
@@ -153,12 +246,8 @@ class MovieService:
             
             film_data['ratings'] = ratings
             
-            # cache.set(cache_key, film_data, 3600)
-            
             return film_data
             
         except Exception as e:
-            logger.error(f"=== ERROR get_movie_data for ID {kinopoisk_id}: {str(e)} ===")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"Error getting movie data for Kinopoisk ID {kinopoisk_id}: {str(e)}")
             return None

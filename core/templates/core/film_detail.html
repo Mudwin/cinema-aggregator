@@ -161,6 +161,7 @@
         <!-- Режиссеры и актеры -->
         <div class="row">
             <!-- Режиссеры -->
+            <!-- В блоке режиссеров и актеров: -->
             {% if directors %}
                 <div class="col-md-6 mb-4">
                     <div class="card h-100">
@@ -174,12 +175,12 @@
                                         <div class="d-flex align-items-center">
                                             {% if director.photo_url %}
                                                 <img src="{{ director.photo_url }}" 
-                                                     class="rounded-circle me-3" 
-                                                     alt="{{ director.name }}" 
-                                                     style="width: 50px; height: 50px; object-fit: cover;">
+                                                    class="rounded-circle me-3" 
+                                                    alt="{{ director.name }}" 
+                                                    style="width: 50px; height: 50px; object-fit: cover;">
                                             {% else %}
                                                 <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3" 
-                                                     style="width: 50px; height: 50px;">
+                                                    style="width: 50px; height: 50px;">
                                                     <i class="bi bi-person" style="color: white;"></i>
                                                 </div>
                                             {% endif %}
@@ -195,7 +196,6 @@
                 </div>
             {% endif %}
 
-            <!-- Актеры -->
             {% if actors %}
                 <div class="col-md-6 mb-4">
                     <div class="card h-100">
@@ -209,20 +209,22 @@
                                         <div class="d-flex align-items-center">
                                             {% if actor.photo_url %}
                                                 <img src="{{ actor.photo_url }}" 
-                                                     class="rounded-circle me-3" 
-                                                     alt="{{ actor.name }}" 
-                                                     style="width: 50px; height: 50px; object-fit: cover;">
+                                                    class="rounded-circle me-3" 
+                                                    alt="{{ actor.name }}" 
+                                                    style="width: 50px; height: 50px; object-fit: cover;">
                                             {% else %}
                                                 <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center me-3" 
-                                                     style="width: 50px; height: 50px;">
+                                                    style="width: 50px; height: 50px;">
                                                     <i class="bi bi-person" style="color: white;"></i>
                                                 </div>
                                             {% endif %}
                                             <div>
                                                 <h6 class="mb-0">{{ actor.name }}</h6>
-                                                <small class="text-muted">
-                                                    {{ actor.character }}
-                                                </small>
+                                                {% if actor.character %}
+                                                    <small class="text-muted">
+                                                        {{ actor.character }}
+                                                    </small>
+                                                {% endif %}
                                             </div>
                                         </div>
                                     </div>
