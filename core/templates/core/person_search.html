@@ -1,0 +1,90 @@
+{% extends 'core/base.html' %}
+{% block title %}Поиск персон{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="mb-3"><i class="bi bi-person-search"></i> Поиск персон</h1>
+        <p class="lead">Найдите актера, режиссера или другого участника съемочной группы</p>
+    </div>
+</div>
+
+<!-- Форма поиска -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" action="{% url 'person_search' %}" class="row g-3">
+            <div class="col-md-10">
+                <label for="query" class="form-label">Имя персоны</label>
+                <input type="text" 
+                       class="form-control form-control-lg" 
+                       id="query" 
+                       name="q" 
+                       value="{{ query|default:'' }}" 
+                       placeholder="Введите имя актера, режиссера..."
+                       required>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-lg w-100">
+                    <i class="bi bi-search"></i> Найти
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Результаты -->
+{% if query %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <h3>Результаты поиска для "{{ query }}"</h3>
+        </div>
+    </div>
+
+    {% if persons %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for person in persons %}
+                <div class="col">
+                    <div class="card film-card">
+                        <div class="row g-0">
+                            <div class="col-md-4">
+                                {% if person.photo_url %}
+                                    <img src="{{ person.photo_url }}" class="img-fluid rounded-start" alt="{{ person.name }}" style="height: 150px; width: 100%; object-fit: cover;">
+                                {% else %}
+                                    <div class="bg-secondary d-flex align-items-center justify-content-center h-100">
+                                        <i class="bi bi-person" style="font-size: 3rem; color: white;"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ person.name }}</h5>
+                                    {% if person.original_name and person.original_name != person.name %}
+                                        <p class="card-text text-muted">
+                                            <small>{{ person.original_name }}</small>
+                                        </p>
+                                    {% endif %}
+                                    
+                                    {% if person.known_for_department %}
+                                        <span class="badge bg-info mb-2">
+                                            {{ person.known_for_department }}
+                                        </span>
+                                    {% endif %}
+                                    
+                                    <a href="{% url 'person_detail' person.tmdb_id %}" class="btn btn-outline-primary btn-sm mt-2">
+                                        <i class="bi bi-person-lines-fill"></i> Подробнее
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+    {% else %}
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            Персоны не найдены.
+        </div>
+    {% endif %}
+{% endif %}
+{% endblock %}

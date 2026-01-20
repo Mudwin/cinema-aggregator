@@ -37,11 +37,9 @@ class FilmAggregator:
             tmdb_data = self._get_tmdb_movie_data(tmdb_id)
             
             if not tmdb_data:
-                logger.error(f"No valid data from TMDB for ID {tmdb_id}")
                 return None
             
             if not tmdb_data.get('title'):
-                logger.error(f"Empty title in TMDB data for ID {tmdb_id}")
                 return None
             
             title = tmdb_data.get('title', '')
@@ -120,7 +118,7 @@ class FilmAggregator:
             return film_data
             
         except Exception as e:
-            logger.error(f"Error aggregating film data for TMDB ID {tmdb_id}: {str(e)}")
+            logger.error(f"Ошибка получения данных для TMDB ID {tmdb_id}: {str(e)}")
             return None
     
     def _get_tmdb_movie_data(self, tmdb_id: int) -> Optional[Dict]:
@@ -138,8 +136,6 @@ class FilmAggregator:
             
             if tmdb_data and tmdb_data.get('id') == tmdb_id:
                 return tmdb_data
-        
-        logger.warning(f"Could not get movie {tmdb_id} directly, trying search...")
         
         search_cache_key = f'tmdb_movie_title_{tmdb_id}'
         movie_title = cache.get(search_cache_key)
@@ -168,7 +164,7 @@ class FilmAggregator:
                 correct_tmdb_id = first_result.get('id')
                 
                 if correct_tmdb_id and correct_tmdb_id != tmdb_id:
-                    logger.info(f"Found correct ID for {movie_title}: {correct_tmdb_id} (was {tmdb_id})")
+                    logger.info(f"Найден правильный ID для {movie_title}: {correct_tmdb_id} (был {tmdb_id})")
                     
                     for language in languages:
                         tmdb_data = self.tmdb_service.get_movie_details(
@@ -193,7 +189,7 @@ class FilmAggregator:
                 omdb_ratings = self.omdb_service.get_movie_ratings(imdb_id)
                 ratings.update(omdb_ratings)
             except Exception as e:
-                logger.error(f"Error getting OMDb ratings for {imdb_id}: {str(e)}")
+                logger.error(f"Ошибка получения рейтингов OMDb для {imdb_id}: {str(e)}")
         
         if imdb_id:
             try:
@@ -202,7 +198,7 @@ class FilmAggregator:
                     kp_ratings = self.kinopoisk_service.get_movie_rating(kinopoisk_movie)
                     ratings.update(kp_ratings)
             except Exception as e:
-                logger.error(f"Error getting Kinopoisk ratings by IMDb ID {imdb_id}: {str(e)}")
+                logger.error(f"Ошибка получения рейтингов Кинопоиска по IMDb ID {imdb_id}: {str(e)}")
         
         if 'kinopoisk' not in ratings and title:
             try:
@@ -213,7 +209,7 @@ class FilmAggregator:
                     if 'kinopoisk' in kp_ratings:
                         ratings['kinopoisk'] = kp_ratings['kinopoisk']
             except Exception as e:
-                logger.error(f"Error searching Kinopoisk by title {title}: {str(e)}")
+                logger.error(f"Ошибка поиска по названию в Кинопоиске {title}: {str(e)}")
         
         return ratings
     
@@ -260,5 +256,5 @@ class FilmAggregator:
             return films
             
         except Exception as e:
-            logger.error(f"Error searching films: {str(e)}")
+            logger.error(f"Ошибка поиска фильмов {str(e)}")
             return []

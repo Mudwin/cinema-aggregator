@@ -13,7 +13,7 @@ class OMDbService(BaseAPIClient):
     """
     
     BASE_URL = "http://www.omdbapi.com"
-    CACHE_TIMEOUT = 3600 * 12  # 12 часов для OMDb
+    CACHE_TIMEOUT = 3600 * 12 
     
     def setup_session(self):
         """Настройка сессии для OMDb API"""
@@ -68,7 +68,6 @@ class OMDbService(BaseAPIClient):
         
         ratings = {}
         
-        # IMDb рейтинг
         if "imdbRating" in data and data["imdbRating"] != "N/A":
             votes = data.get("imdbVotes", "0").replace(",", "")
             ratings["imdb"] = {
@@ -77,30 +76,25 @@ class OMDbService(BaseAPIClient):
                 "votes": int(votes) if votes.isdigit() else 0
             }
         
-        # Metacritic рейтинг
         if "Metascore" in data and data["Metascore"] != "N/A":
             ratings["metacritic"] = {
                 "value": float(data["Metascore"]),
                 "max_value": 100
             }
         
-        # Рейтинги из массива Ratings
         if "Ratings" in data:
             for rating in data["Ratings"]:
                 source = rating["Source"]
                 value = rating["Value"]
                 
                 if "Rotten Tomatoes" in source:
-                    # Rotten Tomatoes: "89%"
                     if "%" in value:
                         ratings["rotten_tomatoes"] = {
                             "value": float(value.replace("%", "")),
                             "max_value": 100
                         }
                 
-                # Metacritic в массиве Ratings
                 elif "Metacritic" in source:
-                    # Metacritic: "94/100"
                     if "/" in value:
                         val, max_val = value.split("/")
                         ratings["metacritic"] = {

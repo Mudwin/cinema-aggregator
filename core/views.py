@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 
 from .services.movie_service import MovieService
+from .services.person_service import PersonService
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def film_search(request):
                 messages.info(request, 'Фильмы не найдены')
                 
         except Exception as e:
-            logger.error(f"Error in film search: {str(e)}")
+            logger.error(f"Ошибка при поиске: {str(e)}")
             messages.error(request, f'Ошибка при поиске: {str(e)}')
     
     context = {
@@ -88,7 +89,7 @@ def film_detail(request, kinopoisk_id):
         return render(request, 'core/film_detail.html', context)
         
     except Exception as e:
-        logger.error(f"Error in film detail for Kinopoisk ID {kinopoisk_id}: {str(e)}")
+        logger.error(f"Ошибка при загрузке данных для Kinopoisk ID {kinopoisk_id}: {str(e)}")
         messages.error(request, 'Ошибка при загрузке данных фильма')
         return redirect('film_search')
 
@@ -101,3 +102,74 @@ def force_refresh(request, kinopoisk_id):
     
     messages.success(request, 'Данные фильма будут обновлены при следующем просмотре')
     return redirect('film_detail', kinopoisk_id=kinopoisk_id)
+
+def person_detail(request, tmdb_id):
+    """Страница персоны с фильмографией."""
+    try:
+        service = PersonService()
+        person_data = service.get_person_data(int(tmdb_id))
+        
+        if not person_data:
+            messages.error(request, 'Персона не найдена')
+            return redirect('home')
+        
+        filmography = service.get_person_filmography_with_ratings(int(tmdb_id))
+        
+        actor_films = [f for f in filmography if f.get('role_type') == 'actor']
+        crew_films = [f for f in filmography if f.get('role_type') != 'actor']
+        
+        actor_films.sort(key=lambda x: x.get('rating_kinopoisk') or x.get('vote_average') or 0, reverse=True)
+        
+        crew_by_job = {}
+        for film in crew_films:
+            job = film.get('role', 'Другое')
+            if job not in crew_by_job:
+                crew_by_job[job] = []
+            crew_by_job[job].append(film)
+        
+        for job in crew_by_job:
+            crew_by_job[job].sort(key=lambda x: x.get('year', 0) or 0, reverse=True)
+        
+        context = {
+            'person': person_data,
+            'actor_films': actor_films,
+            'crew_by_job': crew_by_job,
+            'film_count': person_data.get('film_count', 0),
+            'actor_roles': person_data.get('actor_roles', 0),
+            'crew_roles': person_data.get('crew_roles', 0),
+        }
+        
+        return render(request, 'core/person_detail.html', context)
+        
+    except ValueError:
+        messages.error(request, 'Неверный ID персоны')
+        return redirect('home')
+    except Exception as e:
+        messages.error(request, 'Ошибка при загрузке данных персоны')
+        return redirect('home')
+
+
+def person_search(request):
+    """Поиск персон по имени."""
+    query = request.GET.get('q', '').strip()
+    
+    persons = []
+    
+    if query:
+        try:
+            service = PersonService()
+            persons = service.search_person_by_name(query)
+            
+            if not persons:
+                messages.info(request, 'Персоны не найдены')
+                
+        except Exception as e:
+            logger.error(f"Ошибка при поиске: {str(e)}")
+            messages.error(request, f'Ошибка при поиске: {str(e)}')
+    
+    context = {
+        'query': query,
+        'persons': persons,
+    }
+    
+    return render(request, 'core/person_search.html', context)

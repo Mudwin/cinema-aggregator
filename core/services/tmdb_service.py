@@ -40,8 +40,7 @@ class TMDBService(BaseAPIClient):
         return self.get("search/movie", params=params)
     
     @api_request_logger
-    def get_movie_details(self, tmdb_id: int, append_to_response: Optional[str] = None, 
-                         language: str = 'ru-RU') -> Optional[Dict]:
+    def get_movie_details(self, tmdb_id: int, append_to_response: Optional[str] = None, language: str = 'ru-RU') -> Optional[Dict]:
         """
         Получение детальной информации о фильме.
         """
@@ -53,13 +52,13 @@ class TMDBService(BaseAPIClient):
             result = self.get(f"movie/{tmdb_id}", params=params)
             
             if not result or result.get('id') != tmdb_id:
-                logger.warning(f"TMDB returned wrong data for ID {tmdb_id}. Expected: {tmdb_id}, Got: {result.get('id') if result else 'None'}")
+                logger.warning(f"TMDB вернул не те данные для ID {tmdb_id}. Ожидалось: {tmdb_id}, вернулось: {result.get('id') if result else 'None'}")
                 return None
             
             return result
             
         except Exception as e:
-            logger.error(f"Error getting movie details for {tmdb_id}: {str(e)}")
+            logger.error(f"Ошибка получения данных для {tmdb_id}: {str(e)}")
             return None
     
     @api_request_logger
@@ -73,3 +72,43 @@ class TMDBService(BaseAPIClient):
         }
         
         return self.get(f"find/{imdb_id}", params=params)
+    
+    @api_request_logger
+    def search_person(self, query: str, page: int = 1, language: str = 'ru-RU') -> Dict:
+        """
+        Поиск персон по имени.
+        """
+        params = {
+            "query": query,
+            "page": page,
+            "language": language,
+            "include_adult": "false"
+        }
+        
+        return self.get("search/person", params=params)
+    
+    @api_request_logger
+    def get_person_details(self, person_id: int, append_to_response: Optional[str] = None,
+                          language: str = 'ru-RU') -> Dict:
+        """
+        Получение детальной информации о персоне.
+        """
+        params = {"language": language}
+        if append_to_response:
+            params["append_to_response"] = append_to_response
+            
+        return self.get(f"person/{person_id}", params=params)
+    
+    @api_request_logger
+    def get_person_combined_credits(self, person_id: int, language: str = 'ru-RU') -> Dict:
+        """
+        Получение полной фильмографии персоны (актер + съемочная группа).
+        """
+        return self.get(f"person/{person_id}/combined_credits", params={"language": language})
+    
+    @api_request_logger
+    def get_person_external_ids(self, person_id: int) -> Dict:
+        """
+        Получение внешних идентификаторов персоны (IMDb, etc).
+        """
+        return self.get(f"person/{person_id}/external_ids")

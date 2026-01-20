@@ -21,10 +21,8 @@ class FilmCacheService:
         
         if data:
             if data.get('kinopoisk_id') == kinopoisk_id:
-                logger.debug(f"Cache hit for film {kinopoisk_id}")
                 return data
             else:
-                logger.warning(f"Invalid cache data for film {kinopoisk_id}, deleting")
                 cache.delete(cache_key)
         
         return None
@@ -35,12 +33,10 @@ class FilmCacheService:
         Сохранение данных фильма в кэш с проверкой.
         """
         if data.get('kinopoisk_id') != kinopoisk_id:
-            logger.error(f"Attempt to cache wrong film data. Expected: {kinopoisk_id}, Got: {data.get('kinopoisk_id')}")
             return
         
         cache_key = f'film_data_{kinopoisk_id}'
         cache.set(cache_key, data, timeout)
-        logger.debug(f"Cached film data for {kinopoisk_id}")
     
     @staticmethod
     def clear_film_cache(kinopoisk_id: int) -> None:
@@ -49,7 +45,6 @@ class FilmCacheService:
         """
         cache_key = f'film_data_{kinopoisk_id}'
         cache.delete(cache_key)
-        logger.debug(f"Cleared cache for film {kinopoisk_id}")
     
     @staticmethod
     def clear_all_film_cache() -> None:
@@ -66,4 +61,3 @@ class FilmCacheService:
                 keys_to_delete.append(key)
         
         cache.delete_many(keys_to_delete)
-        logger.info(f"Cleared {len(keys_to_delete)} film cache keys")

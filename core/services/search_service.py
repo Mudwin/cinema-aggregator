@@ -35,10 +35,10 @@ class SearchService:
         film = Film.objects.filter(tmdb_id=tmdb_id).first()
         
         if film:
-            logger.info(f"Film already exists: {film.title} (ID: {film.id})")
+            logger.info(f"Фильм уже существует: {film.title} (ID: {film.id})")
             return film, False
         
-        logger.info(f"Fetching film data from TMDB for ID: {tmdb_id}")
+        logger.info(f"Получаем данные из TMDB для ID: {tmdb_id}")
         movie_data = self.tmdb_service.get_movie_details(
             tmdb_id,
             append_to_response='credits',
@@ -46,7 +46,7 @@ class SearchService:
         )
         
         if not movie_data:
-            raise ValueError(f"No data found for TMDB ID: {tmdb_id}")
+            raise ValueError(f"Нет данных для TMDB ID: {tmdb_id}")
         
         film = self._create_film_from_tmdb(movie_data)
         
@@ -54,7 +54,7 @@ class SearchService:
         
         self._update_persons_data(film, movie_data.get('credits', {}))
         
-        logger.info(f"Film imported successfully: {film.title} (ID: {film.id})")
+        logger.info(f"Успешно загружен фильм: {film.title} (ID: {film.id})")
         
         return film, True
     
@@ -102,7 +102,7 @@ class SearchService:
                 omdb_ratings = self.omdb_service.get_movie_ratings(film.imdb_id)
                 ratings_data.update(omdb_ratings)
             except Exception as e:
-                logger.error(f"Error fetching OMDb ratings for {film.title}: {str(e)}")
+                logger.error(f"Ошибка получения рейтингов OMDb для {film.title}: {str(e)}")
         
         try:
             kinopoisk_movie = self.kinopoisk_service.get_movie_by_imdb_id(
@@ -120,10 +120,10 @@ class SearchService:
                 if 'imdb' in kp_ratings and 'imdb' not in ratings_data:
                     ratings_data['imdb'] = kp_ratings['imdb']
             else:
-                logger.warning(f"Film not found in Kinopoisk: {film.title} (IMDb: {film.imdb_id})")
+                logger.warning(f"Фильм не найден в Кинопоиске: {film.title} (IMDb: {film.imdb_id})")
                 
         except Exception as e:
-            logger.error(f"Error fetching Kinopoisk ratings for {film.title}: {str(e)}")
+            logger.error(f"Ошибка получения рейтингов Кинопоиска для {film.title}: {str(e)}")
         
         if 'kinopoisk' not in ratings_data and film.title:
             try:
@@ -141,7 +141,7 @@ class SearchService:
                         ratings_data['kinopoisk'] = kp_ratings['kinopoisk']
                         
             except Exception as e:
-                logger.error(f"Error searching Kinopoisk by title for {film.title}: {str(e)}")
+                logger.error(f"Ошибка поиска по названию в Кинопоиске для {film.title}: {str(e)}")
         
         self._save_ratings_to_db(film, ratings_data)
         
@@ -273,6 +273,6 @@ class SearchService:
                     'status': 'failed',
                     'error': str(e)
                 })
-                logger.error(f"Failed to import film with TMDB ID {tmdb_id}: {str(e)}")
+                logger.error(f"Ошибка импорта фильма с TMDB ID {tmdb_id}: {str(e)}")
         
         return stats

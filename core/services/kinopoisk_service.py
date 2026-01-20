@@ -2,7 +2,7 @@ import logging
 from typing import Optional, Dict
 
 from django.conf import settings
-from django.core.cache import cache  # ДОБАВЬТЕ ЭТУ СТРОКУ!
+from django.core.cache import cache  
 from .base_api import BaseAPIClient, api_request_logger
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class KinopoiskService(BaseAPIClient):
     """
     
     BASE_URL = "https://kinopoiskapiunofficial.tech/api/v2.2"
-    CACHE_TIMEOUT = 3600 * 6  # 6 часов для Kinopoisk
+    CACHE_TIMEOUT = 3600 * 6 
     
     def setup_session(self):
         """Настройка сессии для Kinopoisk API"""
@@ -48,18 +48,18 @@ class KinopoiskService(BaseAPIClient):
             )
             
             if not result:
-                logger.error(f"Empty response from Kinopoisk for ID {kinopoisk_id}")
+                logger.error(f"Пустой ответ от Кинопоиске для ID {kinopoisk_id}")
                 return {}
             
             result_id = result.get('kinopoiskId') or result.get('kinopoisk_id') or result.get('id')
             if result_id != kinopoisk_id:
-                logger.error(f"Kinopoisk returned wrong movie! Requested: {kinopoisk_id}, Got: {result_id}")
+                logger.error(f"Кинопоиск вернул не тот фильм. Ожидалось: {kinopoisk_id}, получено: {result_id}")
                 return {}
             
             return result
             
         except Exception as e:
-            logger.error(f"Error getting movie details from Kinopoisk for ID {kinopoisk_id}: {str(e)}")
+            logger.error(f"Ошибка получения данных от Кинопоиска для ID {kinopoisk_id}: {str(e)}")
             return {}
     
     @api_request_logger
@@ -97,7 +97,7 @@ class KinopoiskService(BaseAPIClient):
                 kinopoisk_id = film_data
             
             if not kinopoisk_id:
-                logger.warning(f"No kinopoisk_id found in film_data: {film_data}")
+                logger.warning(f"kinopoisk_id на найдено в film_data: {film_data}")
                 return {}
             
             data = self.get_movie_details(kinopoisk_id)
@@ -124,7 +124,7 @@ class KinopoiskService(BaseAPIClient):
             return ratings
             
         except Exception as e:
-            logger.error(f"Error getting movie rating from Kinopoisk: {str(e)}")
+            logger.error(f"Ошибка получения рейтинга от Кинопоиска: {str(e)}")
             return {}
     
     @api_request_logger
@@ -150,7 +150,7 @@ class KinopoiskService(BaseAPIClient):
             return None
             
         except Exception as e:
-            logger.error(f"Error searching movie by IMDb ID {imdb_id}: {str(e)}")
+            logger.error(f"Ошибка поиска фильма по IMDb ID {imdb_id}: {str(e)}")
             return None
 
     def _clean_title_for_search(self, title: str) -> str:

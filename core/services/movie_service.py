@@ -69,7 +69,7 @@ class MovieService:
             return films
             
         except Exception as e:
-            logger.error(f"Error searching movies via Kinopoisk: {str(e)}")
+            logger.error(f"Ошибка поиска фильмов через Кинопоиск: {str(e)}")
             return []
     
     def _find_tmdb_id_for_film(self, title: str, original_title: str, year: int, imdb_id: str = None) -> Optional[int]:
@@ -83,10 +83,10 @@ class MovieService:
                 if tmdb_data and tmdb_data.get('movie_results'):
                     movie_result = tmdb_data['movie_results'][0]
                     if movie_result.get('id'):
-                        logger.info(f"Found TMDB ID {movie_result['id']} for IMDb {imdb_id}")
+                        logger.info(f"Найден TMDB ID {movie_result['id']} для IMDb {imdb_id}")
                         return movie_result['id']
             except Exception as e:
-                logger.debug(f"TMDB search by IMDb ID failed: {str(e)}")
+                logger.debug(f"Поиск в TMDB по IMDb ID вернулся с ошибкой: {str(e)}")
         
         search_attempts = []
         
@@ -111,10 +111,10 @@ class MovieService:
                     if first_result.get('release_date'):
                         result_year = int(first_result['release_date'][:4]) if first_result['release_date'] else None
                         if not year or not result_year or abs(result_year - year) <= 2:
-                            logger.info(f"Found TMDB ID {first_result['id']} for '{search_title}'")
+                            logger.info(f"Найдено TMDB ID {first_result['id']} для '{search_title}'")
                             return first_result['id']
             except Exception as e:
-                logger.debug(f"TMDB search by title failed for '{search_title}': {str(e)}")
+                logger.debug(f"Поиск в TMDB по названию вернулся с ошибкой для '{search_title}': {str(e)}")
                 continue
         
         return None
@@ -127,12 +127,12 @@ class MovieService:
             kp_details = self.kinopoisk_service.get_movie_details(kinopoisk_id)
             
             if not kp_details:
-                logger.error(f"No data from Kinopoisk for ID {kinopoisk_id}")
+                logger.error(f"Нет данных на Кинопоиске для ID {kinopoisk_id}")
                 return None
             
             result_id = kp_details.get('kinopoiskId') or kp_details.get('kinopoisk_id') or kp_details.get('id')
             if result_id != kinopoisk_id:
-                logger.error(f"Kinopoisk returned wrong movie! Expected: {kinopoisk_id}, Got: {result_id}")
+                logger.error(f"Кинопоиск вернул не тот фильм. Ожидалось: {kinopoisk_id}, получено: {result_id}")
                 return None
             
             film_data = {
@@ -185,7 +185,6 @@ class MovieService:
                         credits = tmdb_data['credits']
                         film_data['tmdb_id'] = tmdb_id
                         
-                        # Режиссеры
                         directors = []
                         for person in credits.get('crew', []):
                             if person.get('job') == 'Director':
@@ -193,17 +192,18 @@ class MovieService:
                                 directors.append({
                                     'name': person.get('name', ''),
                                     'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
+                                    'tmdb_id': person.get('id'), 
                                 })
-                        film_data['directors'] = directors[:3]  # Первые 3 режиссера
+                        film_data['directors'] = directors[:3]
                         
-                        # Актеры
                         actors = []
-                        for person in credits.get('cast', [])[:10]:  # Первые 10 актеров
+                        for person in credits.get('cast', [])[:10]:
                             profile_path = person.get('profile_path', '')
                             actors.append({
                                 'name': person.get('name', ''),
                                 'character': person.get('character', ''),
                                 'photo_url': f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None,
+                                'tmdb_id': person.get('id'),
                             })
                         film_data['actors'] = actors
                     else:
@@ -214,7 +214,7 @@ class MovieService:
                     film_data['actors'] = []
                     
             except Exception as e:
-                logger.error(f"Error getting TMDB data for actors/directors: {str(e)}")
+                logger.error(f"Ошибка получения данных из TMDB для актеров/режиссеров: {str(e)}")
                 film_data['directors'] = []
                 film_data['actors'] = []
             
@@ -227,7 +227,7 @@ class MovieService:
                             ratings[source] = rating
                             
                 except Exception as e:
-                    logger.error(f"Error getting OMDb ratings: {str(e)}")
+                    logger.error(f"Ошибка получения рейтингов OMDb: {str(e)}")
             
             normalized_ratings = []
             for source, rating in ratings.items():
@@ -249,5 +249,5 @@ class MovieService:
             return film_data
             
         except Exception as e:
-            logger.error(f"Error getting movie data for Kinopoisk ID {kinopoisk_id}: {str(e)}")
+            logger.error(f"Ошибка получения данных для Kinopoisk ID {kinopoisk_id}: {str(e)}")
             return None

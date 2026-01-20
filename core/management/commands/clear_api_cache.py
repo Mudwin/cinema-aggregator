@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
-    help = 'Clear all API caches'
+    help = 'Очистка всего API кэша'
     
     def handle(self, *args, **options):
         keys_deleted = 0
@@ -17,12 +17,11 @@ class Command(BaseCommand):
                     if isinstance(key, str) and key.startswith('api_cache:'):
                         cache.delete(key)
                         keys_deleted += 1
-                self.stdout.write(self.style.SUCCESS(f'Deleted {keys_deleted} API cache keys from Redis'))
+                self.stdout.write(self.style.SUCCESS(f'Удалены {keys_deleted} ключей кэширования API'))
             else:
                 cache.clear()
-                self.stdout.write(self.style.SUCCESS('Cleared all cache'))
+                self.stdout.write(self.style.SUCCESS('Очищен весь кэш'))
                 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'Error clearing cache: {str(e)}'))
+            self.stdout.write(self.style.ERROR(f'Ошибка очистки кэша: {str(e)}'))
             cache.clear()
-            self.stdout.write(self.style.SUCCESS('Used fallback cache clear'))

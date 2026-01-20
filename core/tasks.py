@@ -27,10 +27,10 @@ def update_film_ratings(self, film_id: int) -> dict:
     try:
         film = Film.objects.get(id=film_id)
     except Film.DoesNotExist:
-        logger.error(f"Film with id {film_id} not found")
+        logger.error(f"Фильм с ID {film_id} не найден")
         return {'status': 'error', 'message': f'Film with id {film_id} not found'}
     
-    logger.info(f"Starting update ratings for film: {film.title} (ID: {film_id})")
+    logger.info(f"Начало обновления рейтингов для: {film.title} (ID: {film_id})")
     
     from ..services import TMDBService, OMDbService, KinopoiskService, RatingCalculator
     
@@ -76,9 +76,9 @@ def update_film_ratings(self, film_id: int) -> dict:
                             stats['ratings_updated'] += 1
                         
                         stats['sources'].append(source)
-                        logger.debug(f"Updated {source} rating for {film.title}: {rating_data['value']}")
+                        logger.debug(f"Обновлены рейтинги из {source} для {film.title}: {rating_data['value']}")
             except Exception as e:
-                logger.error(f"Error updating OMDb ratings for {film.title}: {str(e)}")
+                logger.error(f"Ошибка обновления рейтингов OMDb для {film.title}: {str(e)}")
         
         try:
             kinopoisk_movie = None
@@ -120,7 +120,7 @@ def update_film_ratings(self, film_id: int) -> dict:
                         stats['ratings_updated'] += 1
                     
                     stats['sources'].append(Rating.SourceChoices.KINOPOISK)
-                    logger.debug(f"Updated Kinopoisk rating for {film.title}: {rating_data['value']}")
+                    logger.debug(f"Обновлены рейтинги Кинопоиска для {film.title}: {rating_data['value']}")
                     
                 if 'imdb' in kp_ratings and film.imdb_id:
                     rating_data = kp_ratings['imdb']
@@ -140,23 +140,22 @@ def update_film_ratings(self, film_id: int) -> dict:
                         stats['ratings_updated'] += 1
                         
         except Exception as e:
-            logger.error(f"Error updating Kinopoisk ratings for {film.title}: {str(e)}")
+            logger.error(f"Ошибка обновленя рейтингов Кинопоиска для {film.title}: {str(e)}")
         
         composite_rating = RatingCalculator.calculate_composite_rating(film)
         if composite_rating:
             film.composite_rating = composite_rating
             film.save(update_fields=['composite_rating'])
-            logger.info(f"Updated composite rating for {film.title}: {composite_rating}")
+            logger.info(f"Обновлен композитный рейтинг {film.title}: {composite_rating}")
             stats['composite_rating'] = float(composite_rating)
         
         stats['status'] = 'success'
-        logger.info(f"Successfully updated ratings for {film.title}. "
-                   f"Created: {stats['ratings_created']}, Updated: {stats['ratings_updated']}")
+        logger.info(f"Успешно обновлены рейтинги для {film.title}. "
+                   f"Созданы: {stats['ratings_created']}, обновлены: {stats['ratings_updated']}")
         
         return stats
         
     except Exception as e:
-        logger.error(f"Failed to update ratings for film {film_id}: {str(e)}")
         self.retry(exc=e)
 
 
@@ -170,13 +169,6 @@ def update_film_ratings(self, film_id: int) -> dict:
 def fetch_film_data(self, tmdb_id: int, update_existing: bool = False) -> dict:
     """
     Задача для получения данных о фильме из TMDB и создания записи в базе.
-    
-    Args:
-        tmdb_id (int): ID фильма в TMDB
-        update_existing (bool): Обновить ли существующую запись
-    
-    Returns:
-        dict: Информация о созданном/обновленном фильме
     """
     try:
         film = Film.objects.filter(tmdb_id=tmdb_id).first()
@@ -198,8 +190,8 @@ def fetch_film_data(self, tmdb_id: int, update_existing: bool = False) -> dict:
         )
         
         if not movie_data:
-            logger.error(f"No data received for TMDB ID {tmdb_id}")
-            return {'status': 'error', 'message': 'No data received from TMDB'}
+            logger.error(f"Из TMDB ID не получено данных {tmdb_id}")
+            return {'status': 'error', 'message': 'Нет данных из TMDB'}
         
         release_date = movie_data.get('release_date', '')
         year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
@@ -216,8 +208,6 @@ def fetch_film_data(self, tmdb_id: int, update_existing: bool = False) -> dict:
                     'imdb_id': movie_data.get('imdb_id', '')
                 }
             )
-            
-            logger.info(f"{'Created' if created else 'Updated'} film: {film.title}")
             
             credits = movie_data.get('credits', {})
             
@@ -283,7 +273,7 @@ def fetch_film_data(self, tmdb_id: int, update_existing: bool = False) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to fetch film data for TMDB ID {tmdb_id}: {str(e)}")
+        logger.error(f"Ошибка загрузки данных из TMDB ID {tmdb_id}: {str(e)}")
         self.retry(exc=e)
 
 
@@ -297,20 +287,13 @@ def fetch_film_data(self, tmdb_id: int, update_existing: bool = False) -> dict:
 def update_person_data(self, person_id: int) -> dict:
     """
     Задача для обновления данных о персоне из TMDB.
-    
-    Args:
-        person_id (int): ID персоны в нашей базе данных
-    
-    Returns:
-        dict: Статистика обновления
     """
     try:
         person = Person.objects.get(id=person_id)
     except Person.DoesNotExist:
-        logger.error(f"Person with id {person_id} not found")
-        return {'status': 'error', 'message': f'Person with id {person_id} not found'}
+        return {'status': 'error', 'message': f'Человек с id {person_id} не найден'}
     
-    logger.info(f"Starting update for person: {person.name} (ID: {person_id})")
+    logger.info(f"Начало обновления данных для: {person.name} (ID: {person_id})")
     
     tmdb_service = TMDBService()
     
@@ -318,8 +301,7 @@ def update_person_data(self, person_id: int) -> dict:
         person_data = tmdb_service.get_person_details(person.tmdb_id, language='ru-RU')
         
         if not person_data:
-            logger.error(f"No data received for person TMDB ID {person.tmdb_id}")
-            return {'status': 'error', 'message': 'No data received from TMDB'}
+            return {'status': 'error', 'message': 'Нет данных с TMDB'}
         
         updates = {}
         
@@ -345,9 +327,8 @@ def update_person_data(self, person_id: int) -> dict:
             for field, value in updates.items():
                 setattr(person, field, value)
             person.save()
-            logger.info(f"Updated person {person.name} with {len(updates)} fields")
         else:
-            logger.info(f"No updates needed for person {person.name}")
+            logger.info(f"Для {person.name} нет обновлений")
         
         movie_credits = tmdb_service.get_person_movie_credits(person.tmdb_id, language='ru-RU')
         
@@ -362,7 +343,7 @@ def update_person_data(self, person_id: int) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to update person data for {person_id}: {str(e)}")
+        logger.error(f"Ошибка обновления данных для {person_id}: {str(e)}")
         self.retry(exc=e)
 
 
@@ -373,13 +354,6 @@ def update_person_data(self, person_id: int) -> dict:
 def calculate_composite_ratings(self, film_ids: Optional[List[int]] = None) -> dict:
     """
     Задача для пересчета комплексных рейтингов для фильмов.
-    Если film_ids не указан, пересчитывает для всех фильмов.
-    
-    Args:
-        film_ids (List[int], optional): Список ID фильмов для пересчета
-    
-    Returns:
-        dict: Статистика пересчета
     """
     try:
         if film_ids:
@@ -391,7 +365,7 @@ def calculate_composite_ratings(self, film_ids: Optional[List[int]] = None) -> d
         updated_films = 0
         failed_films = 0
         
-        logger.info(f"Starting composite rating calculation for {total_films} films")
+        logger.info(f"Начало вычисления композитного рейтинга для {total_films}")
         
         for film in films:
             try:
@@ -401,19 +375,16 @@ def calculate_composite_ratings(self, film_ids: Optional[List[int]] = None) -> d
                     film.composite_rating = composite_rating
                     film.save(update_fields=['composite_rating'])
                     updated_films += 1
-                    logger.debug(f"Updated composite rating for {film.title}: {composite_rating}")
+                    logger.debug(f"Для {film.title} обновлен композитный рейтинг: {composite_rating}")
                 else:
                     if film.composite_rating is not None:
                         film.composite_rating = None
                         film.save(update_fields=['composite_rating'])
-                        logger.debug(f"Cleared composite rating for {film.title} (no ratings)")
+                        logger.debug(f"Для {film.title} удален композитный рейтинг")
                         
             except Exception as e:
                 failed_films += 1
-                logger.error(f"Failed to calculate composite rating for film {film.id}: {str(e)}")
-        
-        logger.info(f"Completed composite rating calculation. "
-                   f"Updated: {updated_films}, Failed: {failed_films}, Total: {total_films}")
+                logger.error(f"Ошибка вычисления композитного рейтинга для {film.id}: {str(e)}")
         
         return {
             'status': 'success',
@@ -423,7 +394,7 @@ def calculate_composite_ratings(self, film_ids: Optional[List[int]] = None) -> d
         }
         
     except Exception as e:
-        logger.error(f"Failed to calculate composite ratings: {str(e)}")
+        logger.error(f"Ошибка вычисления композитного рейтинга: {str(e)}")
         self.retry(exc=e)
 
 
@@ -431,12 +402,6 @@ def calculate_composite_ratings(self, film_ids: Optional[List[int]] = None) -> d
 def update_person_data_for_film(film_id: int) -> dict:
     """
     Вспомогательная задача для обновления данных всех персон фильма.
-    
-    Args:
-        film_id (int): ID фильма
-    
-    Returns:
-        dict: Статистика обновления
     """
     try:
         film = Film.objects.get(id=film_id)
@@ -449,14 +414,12 @@ def update_person_data_for_film(film_id: int) -> dict:
     total_persons = len(person_ids)
     updated_persons = 0
     
-    logger.info(f"Updating data for {total_persons} persons from film {film.title}")
-    
     for person_id in person_ids:
         try:
             update_person_data.delay(person_id)
             updated_persons += 1
         except Exception as e:
-            logger.error(f"Failed to schedule update for person {person_id}: {str(e)}")
+            logger.error(f"Ошибка планирования обновления для {person_id}: {str(e)}")
     
     return {
         'status': 'success',
@@ -471,12 +434,6 @@ def update_person_data_for_film(film_id: int) -> dict:
 def update_old_ratings(days_old: int = 7) -> dict:
     """
     Задача для обновления рейтингов фильмов, которые давно не обновлялись.
-    
-    Args:
-        days_old (int): Обновлять рейтинги старше N дней
-    
-    Returns:
-        dict: Статистика обновления
     """
     try:
         cutoff_date = timezone.now() - timedelta(days=days_old)
@@ -487,17 +444,15 @@ def update_old_ratings(days_old: int = 7) -> dict:
         
         total_films = films_to_update.count()
         
-        logger.info(f"Found {total_films} films with ratings older than {days_old} days")
-        
         updated_films = 0
         
         for film in films_to_update:
             try:
                 update_film_ratings.delay(film.id)
                 updated_films += 1
-                logger.debug(f"Scheduled rating update for film {film.title}")
+                logger.debug(f"Запланировано обновление рейтинга для {film.title}")
             except Exception as e:
-                logger.error(f"Failed to schedule update for film {film.id}: {str(e)}")
+                logger.error(f"Ошибка планирования обновления для {film.id}: {str(e)}")
         
         return {
             'status': 'success',
@@ -506,7 +461,7 @@ def update_old_ratings(days_old: int = 7) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to update old ratings: {str(e)}")
+        logger.error(f"Ошибка обновления старых рейтингов: {str(e)}")
         return {'status': 'error', 'message': str(e)}
     
 
@@ -514,13 +469,6 @@ def update_old_ratings(days_old: int = 7) -> dict:
 def update_popular_films_data(limit: int = 50) -> dict:
     """
     Задача для обновления данных популярных фильмов.
-    Обновляет фильмы с самым высоким composite_rating.
-    
-    Args:
-        limit (int): Количество фильмов для обновления
-    
-    Returns:
-        dict: Статистика обновления
     """
     try:
         popular_films = Film.objects.exclude(
@@ -530,14 +478,12 @@ def update_popular_films_data(limit: int = 50) -> dict:
         total_films = popular_films.count()
         updated_films = 0
         
-        logger.info(f"Updating data for {total_films} popular films")
-        
         for film in popular_films:
             try:
                 update_film_ratings.delay(film.id)
                 updated_films += 1
             except Exception as e:
-                logger.error(f"Failed to schedule update for film {film.id}: {str(e)}")
+                logger.error(f"Ошибка планировки обновления для {film.id}: {str(e)}")
         
         return {
             'status': 'success',
@@ -546,7 +492,6 @@ def update_popular_films_data(limit: int = 50) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to update popular films data: {str(e)}")
         return {'status': 'error', 'message': str(e)}
 
 
@@ -554,13 +499,6 @@ def update_popular_films_data(limit: int = 50) -> dict:
 def cleanup_old_tasks(days_old: int = 30) -> dict:
     """
     Задача для очистки старых результатов задач.
-    Удаляет результаты задач старше указанного количества дней.
-    
-    Args:
-        days_old (int): Удалять результаты старше N дней
-    
-    Returns:
-        dict: Статистика очистки
     """
     try:
         from celery.result import AsyncResult
@@ -573,8 +511,6 @@ def cleanup_old_tasks(days_old: int = 30) -> dict:
                 date_done__lt=cutoff_date
             ).delete()
             
-            logger.info(f"Cleaned up {deleted_count} old task results")
-            
             return {
                 'status': 'success',
                 'deleted_count': deleted_count,
@@ -582,14 +518,14 @@ def cleanup_old_tasks(days_old: int = 30) -> dict:
             }
             
         except ImportError:
-            logger.warning("django-celery-results not installed, skipping cleanup")
+            logger.warning("django-celery-results not installed")
             return {
                 'status': 'skipped',
                 'message': 'django-celery-results not installed'
             }
         
     except Exception as e:
-        logger.error(f"Failed to cleanup old tasks: {str(e)}")
+        logger.error(f"Ошибка очистки старых задач: {str(e)}")
         return {'status': 'error', 'message': str(e)}
 
 
@@ -597,9 +533,6 @@ def cleanup_old_tasks(days_old: int = 30) -> dict:
 def check_api_status() -> dict:
     """
     Задача для проверки статуса внешних API.
-    
-    Returns:
-        dict: Статус всех API
     """
     from .services import TMDBService, OMDbService, KinopoiskService
     
@@ -644,7 +577,7 @@ def check_api_status() -> dict:
             'message': str(e)
         }
     
-    logger.info(f"API status check completed: {api_status}")
+    logger.info(f"Завершена проверка API статуса: {api_status}")
     
     return {
         'status': 'success',
@@ -662,12 +595,6 @@ def check_api_status() -> dict:
 def search_and_import_film(self, tmdb_id: int) -> dict:
     """
     Задача для поиска и импорта фильма.
-    
-    Args:
-        tmdb_id (int): ID фильма в TMDB
-    
-    Returns:
-        dict: Результат импорта
     """
     try:
         from .services.search_service import SearchService
@@ -685,7 +612,7 @@ def search_and_import_film(self, tmdb_id: int) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to search and import film {tmdb_id}: {str(e)}")
+        logger.error(f"Ошибка поиска и импорта фильма по {tmdb_id}: {str(e)}")
         self.retry(exc=e)
 
 
@@ -699,12 +626,6 @@ def search_and_import_film(self, tmdb_id: int) -> dict:
 def batch_import_films(self, tmdb_ids: List[int]) -> dict:
     """
     Пакетный импорт фильмов.
-    
-    Args:
-        tmdb_ids (List[int]): Список TMDB ID
-    
-    Returns:
-        dict: Статистика импорта
     """
     try:
         from .services.search_service import SearchService
@@ -718,7 +639,6 @@ def batch_import_films(self, tmdb_ids: List[int]) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to batch import films: {str(e)}")
         self.retry(exc=e)
 
 
@@ -726,12 +646,6 @@ def batch_import_films(self, tmdb_ids: List[int]) -> dict:
 def search_trending_films(limit: int = 20) -> dict:
     """
     Поиск и импорт популярных фильмов из TMDB.
-    
-    Args:
-        limit (int): Количество фильмов для импорта
-    
-    Returns:
-        dict: Результаты импорта
     """
     try:
         from .services import TMDBService
@@ -741,7 +655,7 @@ def search_trending_films(limit: int = 20) -> dict:
         trending_data = tmdb_service.get("trending/movie/week", params={"language": "ru-RU"})
         
         if not trending_data or 'results' not in trending_data:
-            return {'status': 'error', 'message': 'No trending data found'}
+            return {'status': 'error', 'message': 'Нет данных'}
         
         trending_films = trending_data['results'][:limit]
         tmdb_ids = [film['id'] for film in trending_films]
@@ -756,7 +670,7 @@ def search_trending_films(limit: int = 20) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to search trending films: {str(e)}")
+        logger.error(f"Ошибка поиска популярных: {str(e)}")
         return {'status': 'error', 'message': str(e)}
     
 
@@ -764,12 +678,6 @@ def search_trending_films(limit: int = 20) -> dict:
 def quick_import_film(tmdb_id: int) -> dict:
     """
     Быстрый импорт фильма (синхронный внутри задачи).
-    
-    Args:
-        tmdb_id (int): TMDB ID фильма
-    
-    Returns:
-        dict: Результат импорта
     """
     try:
         from .services.search_service import SearchService
@@ -787,5 +695,5 @@ def quick_import_film(tmdb_id: int) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Failed to quick import film {tmdb_id}: {str(e)}")
+        logger.error(f"Ошибка быстрого импорта для {tmdb_id}: {str(e)}")
         return {'status': 'error', 'message': str(e)}

@@ -1,0 +1,187 @@
+{% extends 'core/base.html' %}
+{% block title %}{{ person.name }}{% endblock %}
+{% block content %}
+<!-- Хлебные крошки -->
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'home' %}">Главная</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'person_search' %}">Поиск персон</a></li>
+        <li class="breadcrumb-item active">{{ person.name }}</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <!-- Левая колонка: информация о персоне -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            {% if person.photo_url %}
+                <img src="{{ person.photo_url }}" class="card-img-top" alt="{{ person.name }}" style="height: 400px; object-fit: cover;">
+            {% else %}
+                <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center" style="height: 400px;">
+                    <i class="bi bi-person" style="font-size: 4rem; color: white;"></i>
+                </div>
+            {% endif %}
+            
+            <div class="card-body">
+                <h1 class="card-title">{{ person.name }}</h1>
+                
+                {% if person.original_name and person.original_name != person.name %}
+                    <p class="text-muted">Оригинальное имя: {{ person.original_name }}</p>
+                {% endif %}
+                
+                <div class="person-info mb-3">
+                    {% if person.birth_date %}
+                        <p><i class="bi bi-calendar"></i> <strong>Дата рождения:</strong> {{ person.birth_date }}</p>
+                    {% endif %}
+                    
+                    {% if person.death_date %}
+                        <p><i class="bi bi-calendar-x"></i> <strong>Дата смерти:</strong> {{ person.death_date }}</p>
+                    {% endif %}
+                    
+                    {% if person.place_of_birth %}
+                        <p><i class="bi bi-geo-alt"></i> <strong>Место рождения:</strong> {{ person.place_of_birth }}</p>
+                    {% endif %}
+                    
+                    {% if person.known_for_department %}
+                        <p><i class="bi bi-briefcase"></i> <strong>Основная профессия:</strong> {{ person.known_for_department }}</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Статистика -->
+                <div class="stats-grid mb-3">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="stat-number">{{ film_count }}</div>
+                            <div class="stat-label">Всего фильмов</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-number">{{ actor_roles }}</div>
+                            <div class="stat-label">Актерские роли</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-number">{{ crew_roles }}</div>
+                            <div class="stat-label">Работы в команде</div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if person.biography %}
+                    <div class="mt-3">
+                        <h5>Биография:</h5>
+                        <div class="card-text biography-text" style="max-height: 300px; overflow-y: auto;">
+                            {{ person.biography|linebreaks }}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Правая колонка: фильмография -->
+    <div class="col-md-8">
+        <!-- Актерские работы -->
+        {% if actor_films %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="card-title mb-0"><i class="bi bi-person-video"></i> Актерские работы ({{ actor_films|length }})</h2>
+            </div>
+            <div class="card-body">
+                <div class="row row-cols-1 row-cols-md-2 g-4">
+                    {% for film in actor_films %}
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="row g-0">
+                                <div class="col-4">
+                                    {% if film.poster_url %}
+                                        <img src="{{ film.poster_url }}" class="img-fluid rounded-start" alt="{{ film.title }}" style="height: 120px; object-fit: cover;">
+                                    {% else %}
+                                        <div class="bg-secondary d-flex align-items-center justify-content-center h-100">
+                                            <i class="bi bi-film" style="color: white;"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-8">
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ film.title }}</h6>
+                                        <p class="card-text">
+                                            <small class="text-muted">{{ film.year }}</small><br>
+                                            <small><strong>Роль:</strong> {{ film.role|default:"Актер" }}</small>
+                                        </p>
+                                        
+                                        {% if film.kinopoisk_id %}
+                                            <a href="{% url 'film_detail' film.kinopoisk_id %}" class="btn btn-sm btn-primary">
+                                                <i class="bi bi-info-circle"></i> Подробнее
+                                            </a>
+                                        {% endif %}
+                                        
+                                        {% if film.rating_kinopoisk %}
+                                            <span class="badge bg-danger float-end">
+                                                {{ film.rating_kinopoisk }}
+                                            </span>
+                                        {% elif film.vote_average %}
+                                            <span class="badge bg-secondary float-end">
+                                                {{ film.vote_average|floatformat:1 }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Работы в съемочной группе -->
+        {% for job, films in crew_by_job.items %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="card-title mb-0"><i class="bi bi-people"></i> {{ job }} ({{ films|length }})</h2>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for film in films %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <div>
+                                <h6 class="mb-1">{{ film.title }} ({{ film.year|default:"?" }})</h6>
+                                <small class="text-muted">
+                                    {% if film.role %}
+                                        {{ film.role }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                {% if film.kinopoisk_id %}
+                                    <a href="{% url 'film_detail' film.kinopoisk_id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-info-circle"></i>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--secondary-color);
+}
+.biography-text {
+    line-height: 1.6;
+}
+</style>
+{% endblock %}

@@ -44,19 +44,17 @@ class Command(BaseCommand):
             period=IntervalSchedule.MINUTES,
         )
         
-        # 1. Обновление старых рейтингов (ежедневно в 3:00)
         PeriodicTask.objects.update_or_create(
             name='Обновление старых рейтингов',
             defaults={
                 'task': 'core.tasks.update_old_ratings',
                 'crontab': daily_3am,
-                'args': json.dumps([7]),  # Обновлять рейтинги старше 7 дней
+                'args': json.dumps([7]),  #
                 'description': 'Ежедневное обновление рейтингов, которые давно не обновлялись',
                 'enabled': True,
             }
         )
         
-        # 2. Пересчет комплексных рейтингов (ежедневно в 4:00)
         PeriodicTask.objects.update_or_create(
             name='Пересчет комплексных рейтингов',
             defaults={
@@ -67,19 +65,17 @@ class Command(BaseCommand):
             }
         )
         
-        # 3. Обновление данных популярных фильмов (каждый понедельник в 2:00)
         PeriodicTask.objects.update_or_create(
             name='Обновление данных популярных фильмов',
             defaults={
                 'task': 'core.tasks.update_popular_films_data',
                 'crontab': monday_2am,
-                'args': json.dumps([50]),  # Обновлять 50 самых популярных фильмов
+                'args': json.dumps([50]), 
                 'description': 'Еженедельное обновление данных самых популярных фильмов',
                 'enabled': True,
             }
         )
         
-        # 4. Проверка статуса API (каждый час)
         PeriodicTask.objects.update_or_create(
             name='Проверка статуса API',
             defaults={
@@ -90,7 +86,6 @@ class Command(BaseCommand):
             }
         )
         
-        # 5. Очистка старых задач (ежедневно в 5:00)
         PeriodicTask.objects.update_or_create(
             name='Очистка старых задач',
             defaults={

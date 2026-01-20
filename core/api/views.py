@@ -41,7 +41,6 @@ class StandardResultsSetPagination(PageNumberPagination):
 class FilmSearchView(viewsets.ReadOnlyModelViewSet):
     """
     Представление для поиска фильмов.
-    Поддерживает поиск по названию, году, а также поиск через внешние API.
     """
     queryset = Film.objects.all()
     serializer_class = FilmListSerializer
@@ -98,7 +97,7 @@ class FilmSearchView(viewsets.ReadOnlyModelViewSet):
             )
             
             films_data = []
-            for result in search_results.get('results', [])[:10]:  # 10 результатов
+            for result in search_results.get('results', [])[:10]:  
                 film_data = {
                     'tmdb_id': result.get('id'),
                     'title': result.get('title', ''),
@@ -132,7 +131,7 @@ class FilmSearchView(viewsets.ReadOnlyModelViewSet):
             })
             
         except Exception as e:
-            logger.error(f"Error searching external API: {str(e)}")
+            logger.error(f"Ошибка поиска через API: {str(e)}")
             return Response(
                 {'error': f'Ошибка при поиске: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -170,7 +169,7 @@ class FilmSearchView(viewsets.ReadOnlyModelViewSet):
             })
             
         except Exception as e:
-            logger.error(f"Error importing film from TMDB: {str(e)}")
+            logger.error(f"Ошибка импорта из TMDB: {str(e)}")
             return Response(
                 {'error': f'Ошибка при импорте: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -209,7 +208,7 @@ class FilmSearchView(viewsets.ReadOnlyModelViewSet):
                 })
                 
         except Exception as e:
-            logger.error(f"Error in import_and_update: {str(e)}")
+            logger.error(f"Ошибка в import_and_update: {str(e)}")
             return Response(
                 {'error': f'Ошибка: {str(e)}'},
                 status=http_status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -268,7 +267,7 @@ class FilmSearchView(viewsets.ReadOnlyModelViewSet):
                 results['external_total'] = search_results.get('total_results', 0)
                 
             except Exception as e:
-                logger.error(f"Error searching external API: {str(e)}")
+                logger.error(f"Ошибка поиска через API: {str(e)}")
                 results['external_error'] = str(e)
         
         if local_qs.count() > 0:
@@ -331,7 +330,6 @@ class FilmSearchView(viewsets.ReadOnlyModelViewSet):
             })
             
         except Exception as e:
-            logger.error(f"Error starting trending search: {str(e)}")
             return Response(
                 {'error': f'Ошибка: {str(e)}'},
                 status=http_status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -438,7 +436,7 @@ class FilmDetailView(viewsets.ReadOnlyModelViewSet):
             })
             
         except Exception as e:
-            logger.error(f"Error updating ratings for film {film.id}: {str(e)}")
+            logger.error(f"Ошибка обновления рейтингов для {film.id}: {str(e)}")
             return Response(
                 {'error': f'Ошибка при обновлении рейтингов: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

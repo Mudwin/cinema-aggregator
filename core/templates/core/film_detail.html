@@ -185,7 +185,13 @@
                                                 </div>
                                             {% endif %}
                                             <div>
-                                                <h6 class="mb-0">{{ director.name }}</h6>
+                                                <h6 class="mb-0">
+                                                    {% if director.tmdb_id %}
+                                                        <a href="{% url 'person_detail' director.tmdb_id %}">{{ director.name }}</a>
+                                                    {% else %}
+                                                        {{ director.name }}
+                                                    {% endif %}
+                                                </h6>
                                             </div>
                                         </div>
                                     </div>
@@ -219,7 +225,13 @@
                                                 </div>
                                             {% endif %}
                                             <div>
-                                                <h6 class="mb-0">{{ actor.name }}</h6>
+                                                <h6 class="mb-0">
+                                                    {% if actor.tmdb_id %}
+                                                        <a href="{% url 'person_detail' actor.tmdb_id %}">{{ actor.name }}</a>
+                                                    {% else %}
+                                                        {{ actor.name }}
+                                                    {% endif %}
+                                                </h6>
                                                 {% if actor.character %}
                                                     <small class="text-muted">
                                                         {{ actor.character }}
