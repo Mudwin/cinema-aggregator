@@ -59,7 +59,7 @@
 
 ### 1. Клонируйте репозиторий
 ```bash
-git clone https://github.com/yourusername/cinema-aggregator.git
+git clone https://github.com/mudwin/cinema-aggregator.git
 cd cinema-aggregator
 ```
 

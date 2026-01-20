@@ -172,7 +172,7 @@ if DEBUG and os.getenv('USE_LOCAL_CACHE', 'False') == 'True':
         }
     }
 
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_CACHE_ALIAS = 'default'
 
 LOGGING = {
